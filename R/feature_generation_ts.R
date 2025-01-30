@@ -1,3 +1,23 @@
+is_ts_feature <- function(feature) {
+  is_ts <- FALSE
+  feat <- feature[[length(feature)]]
+  is_ts <- !is.null(attr(feat, "window"))
+  #print(print.feature.ts(feature))
+  if (!is_ts && is.matrix(feat)) {
+      for (i in 2:nrow(feat)) {
+        # If we have a nested feature, recurse into it
+        if (is.list(feature[[feat[i, 2]]])) {
+          is_ts <- is_ts_feature(feature[[feat[i, 2]]])
+          if (is_ts) {
+            return(is_ts)
+          }
+        }
+    }
+  }
+  #print(is_ts)
+  return(is_ts)
+}
+
 gen.time.series.feature <- function (
   features,
   F.0.size,
@@ -11,8 +31,9 @@ gen.time.series.feature <- function (
   # What if all features are ts features?
   #d <- features[[F.0.size+i-1]]
   # Find all features that have already gone through a time series transformation
-  non_ts <- lapply(features, function(x) x <- is.null(attr(x[[length(x)]], "window")))
-  non_ts <- unlist(non_ts)
+  ts_features <- lapply(features, function(x) x <- is_ts_feature(x))
+  #print(ts_features)
+  non_ts <- !unlist(ts_features)
   #print(lapply(features, function(x) x <- print(x[[length(x)]])))
   features <- features[non_ts]
   #print(lapply(features, function(x) x <- print(x[[length(x)]])))
@@ -76,6 +97,9 @@ gen.feature.ts <- function (
                                                         probs$trans_ts, params$L, params$max.proj.size, probs$trans_priors_ts)
     # Check that the feature is not too wide or deep
 
+    #if (feat.type==1) {
+    #  print(print.feature.ts(feat))
+    #}
     #print(print.feature.ts(feat))
     #print(depth.feature(feat))
     #print(width.feature(feat))
@@ -140,7 +164,10 @@ check.collinearity.ts <- function (proposal, features, F.0.size, data, data.ts, 
     #print(mock.data.ts)
   }
   # Use the mock data to precalc the features
+  #print(mock.data.ts)
   mock.data.precalc <- precalc.features.ts(mock.data, mock.data.ts, lookback_window, features)
+  #print(mock.data.precalc)
+  #print(mock.data.precalc)
   # Fit a linear model with the mock data precalculated features
   linearmod <- lm(as.data.frame(mock.data.precalc[, -2]))
   # Check if all coefficients were possible to calculate

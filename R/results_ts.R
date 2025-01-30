@@ -4,7 +4,7 @@ summary.gmjmcmc.ts <- function (object, pop = "best", tol = 0.0001, labels = FAL
   if (pop == "all") {
     results <- list()
     results[[1]] <- object
-    merged <- merge_results(results, pop, 2, 0.0000001, data = data)
+    merged <- merge_results.ts(results, pop, 2, 0.0000001, data = data)
     
     best <- max(sapply(merged$results, function (y) y$best))
     feats.strings <- sapply(merged$features, FUN = function(x) print.feature.ts(x = x, labels = labels, round = 2))
@@ -55,6 +55,8 @@ merge_results.ts <- function (results, populations = NULL, complex.measure = NUL
   if (is.null(tol))
     tol <- 0.0000001
 
+  add_lagged_response <- results[[1]]$add_lagged_response
+
   # Check and filter results that did not run successfully
   results <- filter.results(results)
   raw.results <- results
@@ -62,7 +64,9 @@ merge_results.ts <- function (results, populations = NULL, complex.measure = NUL
 
   # Select populations to use
   res.lengths <- vector("list")
-  for (i in 1:res.count) res.lengths[[i]] <- length(results[[i]]$populations)
+  for (i in 1:res.count) {
+    res.lengths[[i]] <- length(results[[i]]$populations)
+  }
   if (populations == "last") pops.use <- res.lengths
   else if (populations == "all") pops.use <- lapply(res.lengths, function(x) 1:x)
   else if (populations == "best") pops.use <- lapply(1:res.count, function(x) which.max(unlist(results[[x]]$best.marg)))
@@ -123,15 +127,31 @@ merge_results.ts <- function (results, populations = NULL, complex.measure = NUL
   # Get complexity for all features
   complex <- complex.features(features)
 
+  #print(head(data_ts))
+
   ## Detect equivalent features
   # Generate mock data to compare features with
+  #print(results[[1]])
+  if (add_lagged_response) {
+    lag_resp <- c(NA, data[1:(nrow(data)-1), 1])
+    data <- cbind(data, lagged_response = lag_resp)
+    data <- data[2:nrow(data), ]
+  }
+
+  #print(head(data))
   if (is.null(data)) mock.data <- matrix(runif((feat.count + 2)^2, -100, 100), ncol = feat.count + 2)
   else {
     data2 <- data[(lw + 1) : nrow(data), ]
+    #print(head(data2))
     mock.data <- check.data(data2, FALSE)
     mock.data.ts <- check.data(data, FALSE)
+    #print(head(mock.data))
+    #print(head(mock.data.ts))
   }
   
+  #print(head(mock.data))
+  #print(head(mock.data.ts))
+  #print(precalc.features.ts(mock.data, mock.data.ts, lw, features))
   mock.data.precalc <- precalc.features.ts(mock.data, mock.data.ts, lw, features)[,-(1:2)]
 
   # Calculate the correlation to find equivalent features
@@ -172,4 +192,29 @@ merge_results.ts <- function (results, populations = NULL, complex.measure = NUL
   )
   attr(merged, "class") <- "gmjmcmc_merged"
   return(merged)
+}
+
+summary.gmjmcmc_merged.ts <- function (object, tol = 0.0001, labels = FALSE, effects = NULL, pop = NULL, data_ts, window_list, add_lagged_response, ...) {
+  transforms.bak <- set.transforms(object$transforms)
+  transforms.bak.ts <- set.transforms(object$transforms)
+
+  if (!is.null(pop)) {
+    
+    object <- merge_results.ts(object$results.raw, populations = pop, complex.measure = 2, tol = 0.0000001, data = data)
+  }
+  
+  best <- max(sapply(object$results, function (y) y$best))
+  feats.strings <- sapply(object$features, FUN = function(x) print.feature.ts(x = x, labels = labels, round = 2))
+  
+  
+  if (!is.null(effects) & !is.null(labels)) {
+    effects <- compute_effects(object,labels = labels, quantiles = effects)
+  }
+  
+  obj <- summary_internal(best = object$crit.best, feats.strings, object$marg.probs, effects = effects,
+                   best.pop = object$pop.best, thread.best = object$thread.best,  
+                   reported = object$reported, rep.pop = object$rep.pop, rep.thread = object$rep.thread, tol = tol)
+  set.transforms(transforms.bak)
+  set.transforms.ts(transforms.bak.ts)
+  return(obj)
 }
