@@ -35,7 +35,7 @@ usethis::use_data(SangerData,overwrite=TRUE)
 #colnames(df) = c("y",paste0("x",1:47292))
 
 #Reduced dataset first by those having maximum expression levels below the 
-#25-th percentile of all measured expresison levels
+#25-th percentile of all measured expression levels
 q = quantile(df[,-1],0.25)
 foo = apply(df[,-1],2,max)
 nC = ncol(df)-1
@@ -49,12 +49,3 @@ df = df[,c(1,1+c(1:nC)[foo2>2])]
 SangerData2 = as.data.frame(df)
 usethis::use_data(SangerData2,overwrite=TRUE)
 
-
-# Candidates  based on marginal p values
-#p.vec = unlist(mclapply(2:47293, function(x)cor.test(df[,1],df[,x])$p.value))
-#ids = sort(order(p.vec)[1:100])
-
-#Reduce data
-#df = df[,c(1,1+ids)]
-#SangerData2 = df
-#usethis::use_data(SangerData2)

@@ -1,6 +1,6 @@
 #######################################################
 #
-# Example 9 (Section 5.3): Zambia data set from the cAIC4 package
+# Example 10 (Section 6.2): Zambia data set from the cAIC4 package
 #
 # Linear Mixed Model with Fractional Polynomials 
 #
@@ -14,6 +14,7 @@ library(tictoc)
 
 library(devtools)
 devtools::install_github("jonlachmann/GMJMCMC@FBMS", force=T, build_vignettes=F)
+
 library(FBMS)
 use.fbms = FALSE  
 
@@ -76,9 +77,9 @@ mixed.model.loglik.lme4 <- function (y, x, model, complex, params)
     
    # logarithm of model prior
   if (length(params$r) == 0)  params$r <- 1/dim(x)[1]  # default value or parameter r
-  lp <- log.prior(params, complex)
+  lp <- log_prior(params, complex)
   
-  mloglik <- as.numeric(logLik(mm))  -  log(length(y)) * (dim(data)[2] - 2) #Laplace approximation for beta prior
+  mloglik <- as.numeric(logLik(mm))  -  0.5*log(length(y)) * (dim(data)[2] - 2) #Laplace approximation for beta prior
   
   return(list(crit = mloglik + lp, coefs = fixef(mm)))
 }
@@ -121,7 +122,7 @@ mixed.model.loglik.inla <- function (y, x, model, complex, params)
   
   # logarithm of model prior
   if (length(params$r) == 0)  params$r <- 1/dim(x)[1]  # default value or parameter r
-  lp <- log.prior(params, complex)
+  lp <- log_prior(params, complex)
   
   if(length(mod)<3||length(mod$mlik[1])==0) {
     return(list(crit = -10000 + lp,coefs = rep(0,dim(data1)[2]-2)))
@@ -173,12 +174,12 @@ mixed.model.loglik.rtmb <- function (y, x, model, complex, params)
 
   # logarithm of model prior
   if (length(params$r) == 0)  params$r <- 1/dim(x)[1]  # default value or parameter r
-  lp <- log.prior(params, complex)
+  lp <- log_prior(params, complex)
   
 #  if(length(beta)==0) {
 #    return(list(crit = -10000 + lp,coefs = rep(0,dim(data1)[2]-2)))
 #  } else {
-  mloglik <- -2*opt$objective
+  mloglik <- -opt$objective - 0.5*log(dim(x)[1])*msize
   return(list(crit = mloglik + lp, coefs = opt$par[-(1:2)]))
  # }
 }
@@ -208,8 +209,8 @@ if (use.fbms) {
 }
 time.lme4 = toc()
 
-plot(result1b)
-summary(result1b)
+plot(result1a)
+summary(result1a, labels = names(df)[-1])
 
 
 tic()
@@ -235,7 +236,8 @@ if (use.fbms) {
                       probs = probs, params = params, P = 3)
 }
 time.rtmb = toc()
-
+plot(result1c)
+summary(result1c, labels = names(df)[-1])
 
 c(time.lme4$callback_msg, time.inla$callback_msg, time.rtmb$callback_msg)
 
@@ -247,7 +249,7 @@ c(time.lme4$callback_msg, time.inla$callback_msg, time.rtmb$callback_msg)
 
 set.seed(20062024)
 params$feat$pop.max = 10
-result2a <- gmjmcmc.parallel(runs = 40, cores = 40, data = df, loglik.pi = mixed.model.loglik.lme4, transforms = transforms, N.init=100, probs = probs, params = params, P = 25)
+result2a <- gmjmcmc.parallel(runs = 40, cores = 10, data = df, loglik.pi = mixed.model.loglik.lme4, transforms = transforms, N.init=100, probs = probs, params = params, P = 25)
 
 summary(result2a,tol = 0.05,labels=names(df)[-1])   
 

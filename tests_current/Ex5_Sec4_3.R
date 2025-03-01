@@ -2,7 +2,7 @@
 #
 # Example 5 (Section 4.3):
 #
-# Fractional Polynomials: Depths is set to 1!!!
+# Fractional Polynomials: Depths is set to 1
 #
 # This is the valid version for the JSS Paper
 #
@@ -12,9 +12,8 @@
 library(FBMS)
 use.fbms = FALSE  
 
-setwd("/home/florian/FBMS/")
 
-df = read.csv2(file = "art.csv",sep = ",",dec = ".")[,c(16,1:3,5:8,10:14)]
+df = read.csv2(file = "/Users/aliaksandrhome/GMJMCMC/tests/art.csv",sep = ",",dec = ".")[,c(16,1:3,5:8,10:14)]
 
 summary(df)
 
@@ -44,6 +43,8 @@ probs$gen <- c(0,1,0,1) # Only modifications!
 params <- gen.params.gmjmcmc(df)
 params$feat$D <- 1   # Set depth of features to 1
 
+#to set variance to unknown uncomment below
+#params$loglik$var <- "unknown"
 
 ####################################################
 #
@@ -76,7 +77,7 @@ if (use.fbms) {
   result_parallel <- fbms(data = df, method = "gmjmcmc.parallel", transforms = transforms, 
                  probs = probs, params = params, P=25)
 } else {
-  result_parallel =  gmjmcmc.parallel(runs = 40, cores = 40, data = df, 
+  result_parallel =  gmjmcmc.parallel(runs = 40, cores = 10, data = df, 
                         transforms = transforms, probs = probs, params = params, P=25)
 }
 #summary(result_parallel, labels = names(df[-1]))
@@ -90,10 +91,10 @@ diagn_plot(result_parallel, FUN = median)
 set.seed(102)
 
 if (use.fbms) {
-  result_parallel2 <- fbms(data = df, method = "gmjmcmc.parallel", transforms = transforms, 
+  result_parallel2 <- fbms(runs = 40, cores = 10,data = df, method = "gmjmcmc.parallel", transforms = transforms, 
                           probs = probs, params = params, P=25, N.init=1000, N.final=2000)
 } else {
-  result_parallel2 =  gmjmcmc.parallel(runs = 40, cores = 40,data = df, 
+  result_parallel2 =  gmjmcmc.parallel(runs = 40, cores = 10,data = df, 
                           transforms = transforms, probs = probs, params = params, 
                           P=25, N.init=1000, N.final=2000)
 }

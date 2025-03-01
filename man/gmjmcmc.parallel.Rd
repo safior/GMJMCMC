@@ -23,7 +23,7 @@ gmjmcmc.parallel(
 \item{merge.options}{A list of options to pass to the \code{\link[=merge_results]{merge_results()}} function run after the}
 
 \item{data}{A matrix containing the data to use in the algorithm,
-first column should be the dependent variable, second should be the intercept
+first column should be the dependent variable,
 and the rest of the columns should be the independent variables.}
 
 \item{loglik.pi}{The (log) density to explore}
@@ -33,7 +33,7 @@ and the rest of the columns should be the independent variables.}
 \item{transforms}{A Character vector including the names of the non-linear functions to be used by the modification
 and the projection operator.}
 
-\item{...}{Further params passed to mjmcmc.}
+\item{...}{Further parameters passed to mjmcmc.}
 }
 \value{
 Results from multiple gmjmcmc runs

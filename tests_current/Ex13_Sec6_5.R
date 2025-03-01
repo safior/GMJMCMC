@@ -1,6 +1,6 @@
 #######################################################
 #
-# Example 12 (Section 5.6):
+# Example 13 (Section 6.5):
 #
 # Cox Regression
 #
@@ -8,6 +8,8 @@
 #
 #######################################################
 
+library(devtools)
+devtools::install_github("jonlachmann/GMJMCMC@FBMS", force=T, build_vignettes=F)
 
 #install.packages("FBMS")
 library(FBMS)
@@ -67,11 +69,11 @@ surv.pseudo.loglik = function(y, x, model, complex, params){
      out = coxph(formula1, data = data)
 
      # logarithm of marginal likelihood
-     mloglik <- (out$loglik[2] - out$loglik[1])/2 -  log(length(y)) * (dim(data)[2] - 2)   
+     mloglik <- (out$loglik[2] - out$loglik[1]) -  log(length(y)) * (dim(data)[2] - 2)/2   
      
      # logarithm of model prior
      if (length(params$r) == 0)  params$r <- 1/dim(x)[1]  # default value or parameter r
-     lp <- log.prior(params, complex)
+     lp <- log_prior(params, complex)
      
      return(list(crit = mloglik + lp, coefs =  c(0,out$coefficients)))
      

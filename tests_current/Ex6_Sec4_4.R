@@ -19,10 +19,10 @@
 library(FBMS)
 use.fbms = FALSE  
 
-setwd("/home/florian/FBMS/")
 
+data("abalone")
 
-df = read.csv2(file = "abalone.csv",sep = ",",dec = ".")[,c(9,1:8)]
+df = abalone
 df$Sex_F_vs_I = as.numeric(df$Sex == "F")
 df$Sex_M_vs_I = as.numeric(df$Sex == "M")
 df$Sex = as.factor(df$Sex)
@@ -66,8 +66,8 @@ probs <- gen.probs.gmjmcmc(transforms)
 probs$gen <- c(0,0,1,1) #Only projections!
 
 params <- gen.params.gmjmcmc(df.training)
-params$loglik$r = 0.9
-
+#params$loglik$r = 0.9
+#params$loglik$var = "unknown"
 
 
 #############################################################################
@@ -83,7 +83,7 @@ if (use.fbms) {
   result <- fbms(data = df.training, method = "gmjmcmc", transforms = transforms, 
                  probs = probs, params = params)
 } else {
-  result <- gmjmcmc(df.training, transforms = transforms, probs = probs)
+  result <- gmjmcmc(df.training, transforms = transforms, probs = probs,params = params)
 }
 summary(result)
 
@@ -103,14 +103,14 @@ plot(pred$aggr$mean, df.test$Rings)
 #
 #############################################################################
 
-
-set.seed(5002)
+#RNGkind("L'Ecuyer-CMRG") 
+set.seed(5003)
 
 if (use.fbms) {
-  result_parallel <- fbms(data = df.training, method = "gmjmcmc.parallel", runs = 40, cores = 40,
+  result_parallel <- fbms(data = df.training, method = "gmjmcmc.parallel", runs = 4, cores = 4,
                           transforms = transforms, probs = probs, params = params, P=25)
 } else {
-  result_parallel =  gmjmcmc.parallel(runs = 40, cores = 40, data = df.training, 
+  result_parallel =  gmjmcmc.parallel(runs = 4, cores = 4, data = df.training, 
                                     loglik.pi =gaussian.loglik,loglik.alpha = gaussian.loglik.alpha, 
                                     transforms = transforms, probs = probs, params = params, P=25)
 }
@@ -132,8 +132,8 @@ abline(0,1)
 #   Using method 3 to estimate alpha
 #
 #############################################################################
-
-params$feat$alpha = 3
+params$feat$alpha = "deep"
+#params$feat$alpha = "random"
 
 
 set.seed(5003)
@@ -161,11 +161,11 @@ plot(pred.a3$aggr$mean, df.test$Rings)
 
 #############################################################################
 #
-#   Parallel version  params$feat$alpha = 3
+#   Parallel version  params$feat$alpha = "random"
 #
 #############################################################################
 
-params$feat$alpha = 3
+params$feat$alpha = "random"
 
 set.seed(5004)
 
@@ -178,6 +178,8 @@ if (use.fbms) {
                                     transforms = transforms, probs = probs, params = params, P=25)
 }
 summary(result_parallel.a3)
+
+
 
 
 

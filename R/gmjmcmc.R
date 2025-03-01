@@ -11,7 +11,7 @@ NULL
 #' Main algorithm for GMJMCMC (Genetically Modified MJMCMC)
 #'
 #' @param data A matrix containing the data to use in the algorithm,
-#' first column should be the dependent variable, second should be the intercept
+#' first column should be the dependent variable,
 #' and the rest of the columns should be the independent variables.
 #' @param loglik.pi The (log) density to explore
 #' @param loglik.alpha The likelihood function to use for alpha calculation
@@ -59,6 +59,7 @@ gmjmcmc <- function (
   verbose = TRUE
 ) {
   # Verify that the data is well-formed
+  labels <- names(data)[-1]
   data <- check.data(data, verbose)
 
   # Generate default probabilities and parameters if there are none supplied.
@@ -106,7 +107,7 @@ gmjmcmc <- function (
     
     # Initialize first model of population
     model.cur <- as.logical(rbinom(n = length(S[[p]]), size = 1, prob = 0.5))
-    model.cur.res <- loglik.pre(loglik.pi, model.cur, complex, data.t, params$loglik)
+    model.cur.res <- loglik.pre(loglik.pi, model.cur, complex, data.t, params$loglik, NULL, FALSE)
     model.cur <- list(prob = 0, model = model.cur, coefs = model.cur.res$coefs, crit = model.cur.res$crit, alpha = 0)
     best.crit <- model.cur$crit # Reset first best criteria value
 
@@ -158,6 +159,7 @@ gmjmcmc <- function (
     best = max(unlist(best.margs)),    # Best marginal model probability throughout the run
     transforms = transforms            # Transformations used by the model
   )
+  results$labels <- labels
   attr(results, "class") <- "gmjmcmc"
   return(results)
 }
@@ -206,8 +208,9 @@ gmjmcmc.transition <- function (S.t, F.0, data, loglik.alpha, marg.probs.F.0, ma
   if(sum(feats.keep)>params$pop.max)
   {
     warning("Number of features to keep greater than pop.max! 
-            Continue with pop.max features!
-            \n Check your tuning parameters!")
+            Continue with first pop.max features to be kept!
+            \n Ignore if the final set of features with high probabilities is smaller than the specified $feat$pop.max
+            \n Otherwise check your tuning parameters and increase $feat$pop.max or probs$filter!")
     feats.keep[which(feats.keep==TRUE)[(params$pop.max+1):length(which(feats.keep==TRUE))]] <- FALSE
   }
   

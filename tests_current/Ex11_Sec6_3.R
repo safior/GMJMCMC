@@ -1,6 +1,6 @@
 #######################################################
 #
-# Example 10 (Section 5.4): Epil data set from the INLA package
+# Example 11 (Section 6.3): Epil data set from the INLA package
 #
 # Mixed Effect Poisson Model with Fractional Polynomials
 #
@@ -10,9 +10,8 @@
 
 
 
-#install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
-#options(repos=c( inlabruorg = "https://inlabru-org.r-universe.dev", INLA = "https://inla.r-inla-download.org/R/testing", CRAN = "https://cran.rstudio.com") )
-#install.packages("fmesher") 
+library(devtools)
+devtools::install_github("jonlachmann/GMJMCMC@FBMS", force=T, build_vignettes=F)
 
 
 library(FBMS)
@@ -86,7 +85,7 @@ poisson.loglik.inla <- function (y, x, model, complex, params)
   
   # logarithm of model prior
   if (length(params$r) == 0)  params$r <- 1/dim(x)[1]  # default value or parameter r
-  lp <- log.prior(params, complex)
+  lp <- log_prior(params, complex)
   
   if(length(mod)<3||length(mod$mlik[1])==0) {
     return(list(crit = -10000 + lp,coefs = rep(0,dim(data1)[2]-2)))

@@ -36,7 +36,7 @@ rmclapply <- function(runs, args, fun, mc.cores = NULL) {
       ## all clusters.
       clusterEvalQ(cl, library(FBMS))
       clusterExport(cl, "args")
-      clusterExport(cl, ls(all.names = TRUE, env = globalenv()), envir = globalenv())
+      clusterExport(cl, ls(all.names = TRUE, envir = globalenv()), envir = globalenv())
       # Load required packages on each cluster node
       parLapply(cl, seq_along(cl), function(xx) {
         lapply(loaded.package.names, function(pkg) {
@@ -84,7 +84,7 @@ rmclapply <- function(runs, args, fun, mc.cores = NULL) {
 #' Run multiple mjmcmc runs in parallel, merging the results before returning.
 #' @param runs The number of runs to run
 #' @param cores The number of cores to run on
-#' @param ... Further params passed to mjmcmc.
+#' @param ... Further parameters passed to mjmcmc.
 #' @return Merged results from multiple mjmcmc runs
 #'
 #' @examples
@@ -96,6 +96,7 @@ rmclapply <- function(runs, args, fun, mc.cores = NULL) {
 mjmcmc.parallel <- function(runs = 2, cores = getOption("mc.cores", 2L), ...) {
   results <- rmclapply(seq_len(runs), args = list(...), mc.cores = cores, fun = mjmcmc)
   class(results) <- "mjmcmc_parallel"
+  gc()
   return(results)
 }
 
@@ -105,7 +106,7 @@ mjmcmc.parallel <- function(runs = 2, cores = getOption("mc.cores", 2L), ...) {
 #' @param cores The number of cores to run on
 #' @param merge.options A list of options to pass to the [merge_results()] function run after the
 #' @inheritParams gmjmcmc
-#' @param ... Further params passed to mjmcmc.
+#' @param ... Further parameters passed to mjmcmc.
 #' @return Results from multiple gmjmcmc runs
 #'
 #' @examples
@@ -127,10 +128,9 @@ mjmcmc.parallel <- function(runs = 2, cores = getOption("mc.cores", 2L), ...) {
 #' @export
 gmjmcmc.parallel <- function(runs = 2, cores = getOption("mc.cores", 2L), merge.options = list(populations = "best", complex.measure = 2, tol = 0.0000001), data, loglik.pi = gaussian.loglik, loglik.alpha = gaussian.loglik.alpha, transforms, ...) {
   options("gmjmcmc-transformations" = transforms)
-
   results <- rmclapply(seq_len(runs), args = list(data = data, loglik.pi = loglik.pi, loglik.alpha = loglik.alpha, transforms = transforms, ...), mc.cores = cores, fun = gmjmcmc)
-
   class(results) <- "gmjmcmc_parallel"
   merged <- merge_results(results, merge.options$populations, merge.options$complex.measure, merge.options$tol, data = data)
+  gc()
   return(merged)
 }

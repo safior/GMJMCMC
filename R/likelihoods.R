@@ -24,7 +24,7 @@ logistic.loglik <- function (y, x, model, complex, params = list(r = exp(-0.5)))
   if (length(params) == 0)
     params <- list(r = 1/dim(x)[1])
   suppressWarnings({mod <- fastglm(as.matrix(x[, model]), y, family = binomial())})
-  ret <- (-(mod$deviance -2 * log(params$r) * sum(complex$oc))) / 2
+  ret <- (-(mod$deviance + log(length(y)) * (mod$rank - 1) - 2 * log(params$r) * sum(complex$oc))) / 2
   return(list(crit=ret, coefs=mod$coefficients))
 }
 
@@ -49,7 +49,7 @@ logistic.loglik.ala <- function (y, x, model, complex, params = list(r = exp(-0.
   if (length(params) == 0)
     params <- list(r = 1/dim(x)[1])
   suppressWarnings({mod <- fastglm(as.matrix(x[, model]), y, family = binomial(),maxit = 1)})
-  ret <- (-(mod$deviance -2 * log(params$r) * sum(complex$oc))) / 2
+  ret <- (-(mod$deviance + log(length(y)) * (mod$rank - 1) -2 * log(params$r) * sum(complex$oc))) / 2
   return(list(crit=ret, coefs=mod$coefficients))
 }
 
@@ -57,15 +57,14 @@ logistic.loglik.ala <- function (y, x, model, complex, params = list(r = exp(-0.
 #' @param params list of passed parameters of the likelihood in GMJMCMC
 #' @param complex list of complexity measures of the features included into the model 
 #' 
-#' @return A numeric with the log  model prior.
+#' @return A numeric with the log model prior.
 #' 
 #' @examples
-#' log.prior(params = list(r=2), complex = list(oc = 2))
+#' log_prior(params = list(r=2), complex = list(oc = 2))
 #' 
-#' @export log.prior
-log.prior <- function(params,complex){
-  
-  pl =  log(params$r) * (sum(complex$oc))
+#' @export log_prior
+log_prior <- function (params, complex) {
+  pl <- log(params$r) * (sum(complex$oc))
   return(pl)
 }
 
@@ -101,11 +100,19 @@ logistic.loglik.alpha <- function (a, data, mu_func) {
 #'
 #' @export gaussian.loglik
 gaussian.loglik <- function (y, x, model, complex, params) {
-  if (length(params) == 0)
-    params <- list(r = 1/dim(x)[1])
-  
+  if(length(params)==0)
+    params <- list()
+  if (length(params$r) == 0)
+    params$r <- 1/dim(x)[1]
+  if(length(params$var) == 0)
+    params$var <- 1
   suppressWarnings({mod <- fastglm(as.matrix(x[, model]), y, family = gaussian())})
-  ret <- (-(mod$deviance + 2 * log(length(y)) * (mod$rank - 1) - 2 * log(params$r) * (sum(complex$oc)))) / 2
+  
+  if(params$var == "unknown")
+    ret <- (-(mod$aic + (log(length(y))-2) * (mod$rank) - 2 * log(params$r) * (sum(complex$oc)))) / 2
+  else
+    ret <- (-(mod$deviance/params$var + log(length(y)) * (mod$rank - 1) - 2 * log(params$r) * (sum(complex$oc)))) / 2
+  
   return(list(crit=ret, coefs=mod$coefficients))
 }
 

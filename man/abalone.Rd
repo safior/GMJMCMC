@@ -13,15 +13,14 @@ A data frame with 4177 observations on the following 9 variables.
 \item{Rings}{+1.5 gives the age in years, integer}
 \item{Sex}{Sex of the abalone, \code{F} is female, \code{M} male, and \code{I} infant, categorical.}
 \item{Weight_S}{Grams after being dried, continuous.}
-\item{Weight_Sh}{Grams weight of meat, continous.}
+\item{Weight_Sh}{Grams weight of meat, continuous.}
 \item{Weight_V}{Grams gut weight (after bleeding), continuous.}
 \item{Weight_W}{Grams whole abalone, continuous.} }
 }
 \source{
 Dua, D. and Graff, C. (2019). UCI Machine Learning Repository
-\url{https://archive.ics.uci.edu/ml/. Irvine, CA: University of California,
-School of Information and Computer Science.} \%\% ~~ reference to a
-publication or URL from which the data were obtained ~~
+\url{https://archive.ics.uci.edu/ml/}. Irvine, CA: University of California,
+School of Information and Computer Science.
 }
 \description{
 \%\% ~~ A concise (1-5 lines) description of the dataset. ~~

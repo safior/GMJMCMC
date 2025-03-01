@@ -1,9 +1,10 @@
 Package: FBMS
 Type: Package
 Title: Flexible Bayesian Model Selection and Model Averaging
-Version: 1.0
-Date: 2023-11-28
+Version: 1.1
+Date: 2025-02-26
 Encoding: UTF-8
+Language: en-US
 Authors@R: c(
     person("Jon", "Lachmann", email = "jon@lachmann.nu", role = c("cre", "aut")),
     person("Aliaksandr", "Hubin", email = "aliaksah@math.uio.no", role = "aut")
@@ -15,8 +16,10 @@ Depends:
     fastglm,
     GenSA,
     parallel,
+    methods,
     stats,
-    graphics
+    graphics,
+    r2r
 Imports:
     Rcpp
 LinkingTo:

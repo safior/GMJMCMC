@@ -4,7 +4,7 @@
 # Created on: 2021-05-06
 
 #' Merge a list of multiple results from many runs
-#' This function will weight the features based on the best mlik in that population
+#' This function will weight the features based on the best marginal posterior in that population
 #' and merge the results together, simplifying by merging equivalent features (having high correlation).
 #'
 #' @param results A list containing multiple results from GMJMCMC (Genetically Modified MJMCMC).
@@ -28,6 +28,7 @@
 #' \item{best.log.posteriors}{A matrix where the first column contains the population indices and the second column contains the model with the highest log marginal posterior within that population.}
 #' \item{rep.thread}{The index of the thread which contains reported.}
 #'
+#' @examples
 #' result <- gmjmcmc.parallel(
 #'  runs = 1,
 #'  cores = 1,
@@ -233,201 +234,160 @@ model.string <- function (model, features, link = "I", round = 2) {
   return(modelfun)
 }
 
-#' Function to print a quick summary of the results
+#' Retrieve the Median Probability Model (MPM)
 #'
-#' @param object The results to use
-#' @param pop The population to print for, defaults to last
-#' @param tol The tolerance to use as a threshold when reporting the results.
-#' @param labels Should the covariates be named, or just referred to as their place in the data.frame.
-#' @param effects Quantiles for posterior modes of the effects across models to be reported, if either effects are NULL or if labels are NULL, no effects are reported.
-#' @param data Data to merge on, important if prefiltering was used
-#' @param ... Not used.
+#' This function extracts the Median Probability Model (MPM) from a fitted model object.
+#' The MPM includes features with marginal posterior inclusion probabilities greater than 0.5.
+#' It constructs the corresponding model matrix and computes the model fit using the specified likelihood.
 #'
-#' @return A data frame containing the following columns:
-#' \item{feats.strings}{Character representation of the features ordered by marginal probabilities.}
-#' \item{marg.probs}{Marginal probabilities corresponding to the ordered feature strings.}
-#'  
+#' @param result A fitted model object (e.g., from \code{mjmcmc}, \code{gmjmcmc}, or related classes) containing the summary statistics and marginal probabilities.
+#' @param y A numeric vector of response values. For \code{family = "binomial"}, it should contain binary (0/1) responses.
+#' @param x A \code{data.frame} of predictor variables. Columns must correspond to features considered during model fitting.
+#' @param labels If specified, custom labels of covariates can be used. Default is \code{FALSE}.
+#' @param family Character string specifying the model family. Supported options are:
+#'   \itemize{
+#'     \item \code{"gaussian"} (default) - for continuous outcomes.
+#'     \item \code{"binomial"} - for binary outcomes.
+#'     \item \code{"custom"} - for user-defined likelihood functions.
+#'   }
+#' If an unsupported family is provided, a warning is issued and the Gaussian likelihood is used by default.
+#' @param loglik.pi A function that computes the log-likelihood. Defaults to \code{gaussian.loglik} unless \code{family = "binomial"}, in which case \code{logistic.loglik} is used. for custom family the user must specify the same likelihood that was used in the inference.
+#' @param params Parameters of `loglik.pi`, if not specified NULL will be used by default
+#'
+#' @return A \code{bgnlm_model} object containing:
+#' \describe{
+#'   \item{\code{prob}}{The log marginal likelihood of the MPM.}
+#'   \item{\code{model}}{A logical vector indicating included features.}
+#'   \item{\code{crit}}{Criterion label set to \code{"MPM"}.}
+#'   \item{\code{coefs}}{A named numeric vector of model coefficients, including the intercept.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Simulate data
+#' set.seed(42)
+#' x <- data.frame(
+#'   PlanetaryMassJpt = rnorm(100),
+#'   RadiusJpt = rnorm(100),
+#'   PeriodDays = rnorm(100)
+#' )
+#' y <- 1 + 0.5 * x$PlanetaryMassJpt - 0.3 * x$RadiusJpt + rnorm(100)
+#'
+#' # Assume 'result' is a fitted object from gmjmcmc or mjmcmc
+#' result <- mjmcmc(cbind(y,x))  
+#'
+#' # Get the MPM
+#' mpm_model <- get.mpm.model(result, y, x, family = "gaussian")
+#'
+#' # Access coefficients
+#' mpm_model$coefs
+#' }
+#'
+#' @export
+get.mpm.model <- function(result, y, x, labels = F, family = "gaussian", loglik.pi = gaussian.loglik, params = NULL) {
+  if (!family %in% c("custom","binomial","gaussian"))
+    warning("Unknown family specified. The default gaussian.loglik will be used.")
+  
+  if (family == "binomial")
+    loglik.pi <- logistic.loglik
+  
+  sm <- summary(result, labels = labels, verbose = FALSE)
+  mpm <- sm$feats.strings[sm$marg.probs > 0.5]
+  
+  x.precalc <- model.matrix(
+    as.formula(paste0("~I(", paste0(mpm, collapse = ")+I("), ")")),
+    data = x)
+  
+  model <- loglik.pi(y = y, x = x.precalc, model = rep(TRUE, length(mpm) + 1), complex = list(oc = 0), params = params)
+  class(model) <- "bgnlm_model"
+  model$crit <- "MPM"
+  return(model)
+}
+
+
+#' Extract the Best Model from MJMCMC or GMJMCMC Results
+#'
+#' This function retrieves the best model from the results of MJMCMC, MJMCMC parallel, GMJMCMC, or GMJMCMC merged runs 
+#' based on the maximum criterion value (\code{crit}). The returned list includes the model probability, selected features, 
+#' criterion value, intercept parameter, and named coefficients.
+#'
+#' @param result An object of class \code{"mjmcmc"}, \code{"mjmcmc_parallel"}, \code{"gmjmcmc"}, or \code{"gmjmcmc_merged"}, 
+#' containing the results from the corresponding model search algorithms.
+#' @param labels Logical; if \code{TRUE}, uses labeled feature names when naming the model coefficients. Default is \code{FALSE}.
+#'
+#' @return A list containing the details of the best model:
+#' \describe{
+#'   \item{\code{prob}}{A numeric value representing the model's probability.}
+#'   \item{\code{model}}{A logical vector indicating which features are included in the best model.}
+#'   \item{\code{crit}}{The criterion value used for model selection (e.g., marginal likelihood or posterior probability).}
+#'   \item{\code{alpha}}{The intercept parameter of the best model.}
+#'   \item{\code{coefs}}{A named numeric vector of model coefficients, including the intercept and selected features.}
+#' }
+#'
+#' @details 
+#' The function identifies the best model by selecting the one with the highest \code{crit} value. Selection logic depends on the class of the \code{result} object:
+#' \describe{
+#'   \item{\code{"mjmcmc"}}{Selects the top model from a single MJMCMC run.}
+#'   \item{\code{"mjmcmc_parallel"}}{Identifies the best chain, then selects the best model from that chain.}
+#'   \item{\code{"gmjmcmc"}}{Selects the best population and model within that population.}
+#'   \item{\code{"gmjmcmc_merged"}}{Finds the best chain and population before extracting the top model.}
+#' }
+#'
 #' @examples
 #' result <- gmjmcmc(matrix(rnorm(600), 100), P = 2, gaussian.loglik, NULL, c("p0", "exp_dbl"))
-#' summary(result, pop = "best")
+#' get.best.model(result)
 #'
-#' @export 
-summary.gmjmcmc <- function (object, pop = "best", tol = 0.0001, labels = FALSE, effects = NULL, data = NULL, ...) {
-  transforms.bak <- set.transforms(object$transforms)
-  if (pop == "all") {
-    results <- list()
-    results[[1]] <- object
-    merged <- merge_results(results, pop, 2, 0.0000001, data = data)
-    
-    best <- max(sapply(merged$results, function (y) y$best))
-    feats.strings <- sapply(merged$features, FUN = function(x) print.feature(x = x, labels = labels, round = 2))
-    
-    if (!is.null(effects) & !is.null(labels)) {
-      effects <- compute_effects(merged,labels = labels, quantiles = effects)
+#' @export
+get.best.model <- function(result, labels = FALSE) {
+  if (is(result,"mjmcmc")) {
+    return(get.best.model.mjmcmc(result, labels))
+  }
+  
+  if (is(result,"mjmcmc_parallel")) {
+    if (length(labels) == 1 && labels[1] == FALSE && length(result[[1]]$labels) > 0) {
+      labels <- result[[1]]$labels
     }
-    
-    return(summary_internal(best = merged$crit.best, feats.strings, merged$marg.probs, effects = effects,
-                     best.pop = merged$pop.best, thread.best = merged$thread.best,  
-                     reported = merged$reported, rep.pop = merged$rep.pop, rep.thread = merged$rep.thread, tol = tol))
+    best.chain <- which.max(sapply(result,function(x)x$best.crit))
+    return(get.best.model.mjmcmc(result[[best.chain]], labels))
   }
   
-  if (pop == "last") pop <- length(object$models)
-  else if (pop == "best") pop <- which.max(unlist(object$best.margs))
-  feats.strings <- sapply(object$populations[[pop]], FUN = function(x) print.feature(x = x, labels = labels, round = 2))
-  
-  if (!is.null(effects) & !is.null(labels)) {
-    effects <- compute_effects(object, labels = labels, quantiles = effects)
+  if (is(result,"gmjmcmc")) {
+    return(get.best.model.gmjmcmc(result, labels))
   }
   
-  obj <- summary_internal(
-    best = object$best,
-    marg.probs = object$marg.probs[[pop]],
-    effects = effects,
-    feats.strings = feats.strings,
-    best.pop = which.max(unlist(object$best.margs)),
-    reported = object$best.margs[[pop]],
-    rep.pop = pop,
-    tol = tol
-  )
-  set.transforms(transforms.bak)
-  return(obj)
-}
-
-#' Function to print a quick summary of the results
-#'
-#' @param object The results to use
-#' @param tol The tolerance to use as a threshold when reporting the results.
-#' @param labels Should the covariates be named, or just referred to as their place in the data.frame.
-#' @param effects Quantiles for posterior modes of the effects across models to be reported, if either effects are NULL or if labels are NULL, no effects are reported.
-#' @param pop If null same as in merge.options for running parallel gmjmcmc otherwise results will be re-merged according to pop that can be "all", "last", "best"
-#' @param data Data to merge on, important if prefiltering was used
-#' @param ... Not used.
-#'
-#' @return A data frame containing the following columns:
-#' \item{feats.strings}{Character representation of the features ordered by marginal probabilities.}
-#' \item{marg.probs}{Marginal probabilities corresponding to the ordered feature strings.}
-#'
-#' @examples
-#' result <- gmjmcmc.parallel(
-#'  runs = 1,
-#'  cores = 1,
-#'  list(populations = "best", complex.measure = 2, tol = 0.0000001),
-#'  matrix(rnorm(600), 100),
-#'  P = 2,
-#'  gaussian.loglik,
-#'  loglik.alpha = gaussian.loglik.alpha,
-#'  c("p0", "exp_dbl")
-#' )
-#' summary(result)
-#'
-#' @export 
-summary.gmjmcmc_merged <- function (object, tol = 0.0001, labels = FALSE, effects = NULL, pop = NULL, data = NULL, ...) {
-  transforms.bak <- set.transforms(object$transforms)
-  if (!is.null(pop)) {
-    
-    object <- merge_results(object$results.raw, populations = pop, complex.measure = 2, tol = 0.0000001, data = data)
-  }
-  
-  best <- max(sapply(object$results, function (y) y$best))
-  feats.strings <- sapply(object$features, FUN = function(x) print.feature(x = x, labels = labels, round = 2))
-  
-  
-  if (!is.null(effects) & !is.null(labels)) {
-    effects <- compute_effects(object,labels = labels, quantiles = effects)
-  }
-  
-  obj <- summary_internal(best = object$crit.best, feats.strings, object$marg.probs, effects = effects,
-                   best.pop = object$pop.best, thread.best = object$thread.best,  
-                   reported = object$reported, rep.pop = object$rep.pop, rep.thread = object$rep.thread, tol = tol)
-  set.transforms(transforms.bak)
-  return(obj)
-}
-
-#' Function to print a quick summary of the results
-#'
-#' @param object The results to use
-#' @param tol The tolerance to use as a threshold when reporting the results.
-#' @param labels Should the covariates be named, or just referred to as their place in the data.frame.
-#' @param effects Quantiles for posterior modes of the effects across models to be reported, if either effects are NULL or if labels are NULL, no effects are reported.
-#' @param ... Not used.
-#'
-#' @return A data frame containing the following columns:
-#' \item{feats.strings}{Character representation of the covariates ordered by marginal probabilities.}
-#' \item{marg.probs}{Marginal probabilities corresponding to the ordered feature strings.}
-#'
-#' @examples
-#' result <- mjmcmc(matrix(rnorm(600), 100), gaussian.loglik)
-#' summary(result)
-#'
-#' @export 
-summary.mjmcmc <- function (object, tol = 0.0001, labels = FALSE, effects = NULL, ...) {
-  return(summary.mjmcmc_parallel(list(object), tol = tol, labels = labels, effects = effects))
-}
-
-#' Function to print a quick summary of the results
-#'
-#' @param object The results to use
-#' @param tol The tolerance to use as a threshold when reporting the results.
-#' @param labels Should the covariates be named, or just referred to as their place in the data.frame.
-#' @param effects Quantiles for posterior modes of the effects across models to be reported, if either effects are NULL or if labels are NULL, no effects are reported.
-#' @param ... Not used.
-#'
-#' @return A data frame containing the following columns:
-#' \item{feats.strings}{Character representation of the covariates ordered by marginal probabilities.}
-#' \item{marg.probs}{Marginal probabilities corresponding to the ordered feature strings.}
-#'
-#' @examples
-#' result <- mjmcmc.parallel(runs = 1, cores = 1, matrix(rnorm(600), 100), gaussian.loglik)
-#' summary(result)
-#'
-#' @export 
-summary.mjmcmc_parallel <- function (object, tol = 0.0001, labels = FALSE, effects = NULL, ...) {
-  # Get features as strings for printing
-  feats.strings <- sapply(object[[1]]$populations, FUN = function(x) print.feature(x = x, labels = labels, round = 2))
-  # Get marginal posterior of features
-  models <- unlist(lapply(object, function (x) x$models), recursive = FALSE)
-  marg.probs <- marginal.probs.renorm(models)$probs
-  best <- max(sapply(object, function (x) x$best))
-  if (!is.null(effects) & !is.null(labels)) {
-    if (is.list(object))
-      effects <- compute_effects(object[[1]],labels = labels, quantiles = effects)
-    else
-      effects <- compute_effects(object,labels = labels, quantiles = effects)
-  }
-  return(summary_internal(best, feats.strings, marg.probs, effects, tol = tol))
-}
-
-summary_internal <- function (best, feats.strings, marg.probs, effects = NULL, tol = 0.0001, best.pop = NULL,reported = NULL, rep.pop = NULL, rep.thread = NULL, thread.best = NULL) {
-  # Print the final distribution
-  keep <- which(marg.probs[1, ] > tol)
-  cat("                   Importance | Feature\n")
-  print_dist(marg.probs[keep], feats.strings[keep], -1)
-  # Print the best log marginal posterior
-  if (length(best.pop) > 0) {
-    if (length(thread.best) > 0) {
-      cat("\nBest   population:", best.pop, " thread:", thread.best,  " log marginal posterior:", best,"\n")
-      cat("Report population:", rep.pop," thread:", rep.thread,  " log marginal posterior:", reported,"\n")
-    } else {
-      cat("\nBest   population:", best.pop,  " log marginal posterior:", best,"\n")
-      cat("Report population:", rep.pop,  " log marginal posterior:", reported,"\n")
+  if (is(result,"gmjmcmc_merged")) {
+    if (length(labels) == 1 && labels[1] == FALSE && length(result$results.raw[[1]]$labels) > 0) {
+      labels <- result$results.raw[[1]]$labels
     }
-  } else {
-    cat("\nBest log marginal posterior: ", best,"\n")
+    best.chain <- which.max(sapply(result$results, function(x) x$best))
+    return(get.best.model.gmjmcmc(result$results.raw[[best.chain]], labels))
   }
-  cat("\n")
-
-  feats.strings <- feats.strings[keep]
-  marg.probs <- marg.probs[1, keep]
-  ord.marg <- order(marg.probs, decreasing = TRUE)
-  
-  if (!is.null(effects)) {
-    return(list(PIP = data.frame(feats.strings = feats.strings[ord.marg], marg.probs = marg.probs[ord.marg]), EFF = effects))
-  }
-  
-  return(data.frame(feats.strings = feats.strings[ord.marg], marg.probs = marg.probs[ord.marg]))
 }
 
-#' Function to get a character respresentation of a list of features
+get.best.model.gmjmcmc <- function (result, labels) {
+  if (length(labels) == 1 && labels[1] == FALSE && length(result$labels) > 0) {
+    labels = result$labels
+  }
+  best.pop.id <- which.max(sapply(result$best.margs,function(x)x))
+  best.mod.id <- which.max(sapply(result$models[[best.pop.id]],function(x)x$crit))
+  ret <- result$models[[best.pop.id]][[best.mod.id]]
+  names(ret$coefs) <- c("Intercept",sapply(result$populations[[best.pop.id]],print.feature,labels = labels)[which(ret$model)])
+  class(ret) = "bgnlm_model"
+  return(ret)
+}
+
+get.best.model.mjmcmc <- function (result, labels) {
+  if (length(labels) == 1 && labels[1] == FALSE && length(result$labels) > 0 ) {
+    labels = result$labels
+  }
+  best.mod.id <- which.max(sapply(result$models,function(x)x$crit))
+  ret <- result$models[[best.mod.id]]
+  names(ret$coefs) <- c("Intercept",sapply(result$populations,print.feature,labels = labels)[which(ret$model)])
+  class(ret) = "bgnlm_model"
+  return(ret)
+}
+
+#' Function to get a character representation of a list of features
 #'
 #' @param x A list of feature objects
 #' @param round Rounding precision for parameters of the features
@@ -443,7 +403,7 @@ string.population <- function(x, round = 2) {
   cbind(sapply(x, print.feature, round = round))
 }
 
-#' Function to get a character respresentation of a list of models
+#' Function to get a character representation of a list of models
 #'
 #' @param features A list of feature objects on which the models are build
 #' @param models A list of model objects
@@ -468,7 +428,7 @@ string.population.models <- function(features, models, round = 2, link = "I") {
 #' @param count The number of features to plot, defaults to all
 #' @param pop The population to plot, defaults to last
 #' @param tol The tolerance to use for the correlation when finding equivalent features, default is 0.0000001
-#' @param data Data to merge on, important if prefiltering was used
+#' @param data Data to merge on, important if pre-filtering was used
 #' @param ... Not used.
 #'
 #' @return No return value, just creates a plot
@@ -479,7 +439,7 @@ string.population.models <- function(features, models, round = 2, link = "I") {
 #' 
 #'
 #' @export 
-plot.gmjmcmc <- function (x, count = "all", pop = "best",tol =  0.0000001, data = NULL, ...) {
+plot.gmjmcmc <- function (x, count = "all", pop = "best", tol = 0.0000001, data = NULL, ...) {
   transforms.bak <- set.transforms(x$transforms)
   if (pop != "last") {
     results <- list()

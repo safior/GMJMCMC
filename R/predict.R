@@ -1,3 +1,47 @@
+#' Predict responses from a BGNLM model
+#'
+#' This function generates predictions from a fitted \code{bgnlm_model} object given a new dataset.
+#'
+#' @param object A fitted \code{bgnlm_model} object obtained from the BGNLM fitting procedure. 
+#'              It should contain the estimated coefficients in \code{model$coefs}.
+#' @param x A \code{data.frame} containing the new data for which predictions are to be made. 
+#'          The variables in \code{x} must match the features used in the model.
+#' @param link A link function to apply to the linear predictor. 
+#'             By default, it is the identity function \code{function(x)\{x\}}, 
+#'             but it can be any function such as \code{plogis} for logistic regression models.
+#' @param ...  Additional arguments to pass to prediction function.
+#'
+#' @return A numeric vector of predicted values for the given data \code{x}. 
+#'         These predictions are calculated as \eqn{\hat{y} = \text{link}(X \beta)}, 
+#'         where \eqn{X} is the design matrix and \eqn{\beta} are the model coefficients.
+#'
+#' @examples
+#' \dontrun{
+#' # Example with simulated data
+#' set.seed(123)
+#' x_train <- data.frame(PlanetaryMassJpt = rnorm(100), RadiusJpt = rnorm(100))
+#' model <- list(
+#'   coefs = c(Intercept = -0.5, PlanetaryMassJpt = 0.2, RadiusJpt = -0.1),
+#'   class = "bgnlm_model"
+#' )
+#' class(model) <- "bgnlm_model"
+#'
+#' # New data for prediction
+#' x_new <- data.frame(PlanetaryMassJpt = c(0.1, -0.3), RadiusJpt = c(0.2, -0.1))
+#'
+#' # Predict using the identity link (default)
+#' preds <- predict.bgnlm_model(model, x_new)
+#' }
+#'
+#' @export
+predict.bgnlm_model <- function(object, x, link = function(x) { x }, ... ) {
+  x.precalc <- model.matrix(
+    as.formula(paste0("~I(", paste0(names(object$coefs)[-1], collapse = ")+I("), ")")),
+    data = x
+  )
+  yhat <- link(x.precalc %*% object$coefs)
+  return(yhat)
+}
 
 
 #' Predict using a gmjmcmc result object.
@@ -39,7 +83,7 @@ predict.gmjmcmc <- function (object, x, link = function(x) x, quantiles = c(0.02
     rm(na.matr)
   } else x <- as.matrix(x)
   
-  merged <- merge_results(list(object),data = cbind(1,x),populations = pop,tol = tol)
+  merged <- merge_results(list(object),data = cbind(1, x), populations = pop, tol = tol)
   set.transforms(transforms.bak)
   return(predict.gmjmcmc_merged(merged, x, link, quantiles))
 }
@@ -80,7 +124,7 @@ predict.gmjmcmc.2 <- function (object, x, link = function(x) x, quantiles = c(0.
 #' @param object The model to use.
 #' @param x The new data to use for the prediction, a matrix where each row is an observation.
 #' @param link The link function to use
-#' @param quantiles The quantiles to calculate credible intervals for the posterior moddes (in model space).
+#' @param quantiles The quantiles to calculate credible intervals for the posterior modes (in model space).
 #' @param pop The population to plot, defaults to last
 #' @param tol The tolerance to use for the correlation when finding equivalent features, default is 0.0000001
 #' 
@@ -104,9 +148,6 @@ predict.gmjmcmc.2 <- function (object, x, link = function(x) x, quantiles = c(0.
 #'
 #' @export
 predict.gmjmcmc_merged <- function (object, x, link = function(x) x, quantiles = c(0.025, 0.5, 0.975), pop = NULL,tol =  0.0000001, ...) {
-  
-
-  
   if(!is.null(attr(object,which = "imputed")))
   {
     df <- data.frame(x)
