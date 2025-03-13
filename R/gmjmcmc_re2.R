@@ -1,5 +1,5 @@
-#' @export gmjmcmc.ts
-gmjmcmc.ts <- function (
+#' @export gmjmcmc.re2
+gmjmcmc.re2 <- function (
   data_ts,
   loglik.pi = gaussian.loglik,
   loglik.alpha = gaussian.loglik.alpha,
@@ -9,6 +9,12 @@ gmjmcmc.ts <- function (
   window_list,
   add_lagged_response = TRUE,
   ###############
+  # Correlation
+  ###############
+  re_data,
+  rand_effects,
+  marg_lik_method,
+  ###############
   P = 10,
   N.init = 100,
   N.final = 100,
@@ -17,6 +23,7 @@ gmjmcmc.ts <- function (
   sub = FALSE,
   verbose = TRUE
 ) {
+
   # Must discard starting values corresponding to the lookback window
   # Must copy the covariates and response and somehow make them available to the algorithm to compute time series features
   if (add_lagged_response) {
@@ -25,20 +32,18 @@ gmjmcmc.ts <- function (
     # Remove start to ensure time series transforms are computable.
     # 2 because of NA introduced above
     data_ts <- data_ts[2:nrow(data_ts), ]
+    re_data <- re_data[2:nrow(data_ts), ]
   }
-  #print(head(data_ts))
   # Find the largest possible lookback over all transforms
   lookback_window <- max(unlist(window_list))
-  #print(lookback_window)
   # +1 because we need a full window of covariates
   data <- data_ts[(lookback_window + 1) : nrow(data_ts), ]
-  #print(head(data))
-  #data[1:start, 1] <- NA
-  #print(data)
+  re_data <- re_data[(lookback_window + 1) : nrow(data_ts), ]
 
   # Verify that the data is well-formed
   data <- check.data(data, verbose)
   data_ts <- check.data(data_ts, verbose)
+  #re_data <- check.data(re_data, verbose)
 
   # Generate default probabilities and parameters if there are none supplied.
   if (is.null(probs)) probs <- gen.probs.gmjmcmc.ts(ts_transforms, transforms)
@@ -53,6 +58,7 @@ gmjmcmc.ts <- function (
   accept <- lapply(accept, function (x) x <- 0)
   # A list of populations that have been visited
   S <- vector("list", P)
+  S_re <- vector("list", P) 
   # A list of models that have been visited, refering to the populations
   models <- vector("list", P)
   lo.models <- vector("list", P)
@@ -66,14 +72,18 @@ gmjmcmc.ts <- function (
   best.margs <- vector("list", P)
 
   # Create first population
-  # How can you add time series features here?
   F.0 <- gen.covariates(ncol(data) - 2)
   if (is.null(params$prel.select))
     S[[1]] <- F.0
   else
     S[[1]] <- F.0[params$prel.select]
-
+  
   complex <- complex.features(S[[1]])
+
+  # Generate first population of random effects
+  max_re <- params$max_rand_effects
+  S_re[[1]] <- gen_rand_effects(rand_effects, marg_lik_method, max_re)
+  #print(names(S_re[[1]]))
 
   ### Main algorithm loop - Iterate over P different populations
   for (p in seq_len(P)) {
@@ -89,15 +99,22 @@ gmjmcmc.ts <- function (
     
     # Initialize first model of population
     model.cur <- as.logical(rbinom(n = length(S[[p]]), size = 1, prob = 0.5))
-    #print(model.cur)
-    model.cur.res <- loglik.pre(loglik.pi, model.cur, complex, data.t, params$loglik)
-    model.cur <- list(prob = 0, model = model.cur, coefs = model.cur.res$coefs, crit = model.cur.res$crit, alpha = 0)
+    # Initialize first random effect of population
+    n_re <- length(S_re[[p]])
+    #re.ind <- sample.int(n_re, size = 1)
+    re.ind <- sample(0:n_re, size = 1)
+    re.cur.log <- ind.to.log(re.ind, n_re)
+
+    re.pop <- S_re[[p]]
+
+    model.cur.res <- loglik.pre.re2(loglik.pi, model.cur, complex, data.t, params$loglik, NULL, FALSE, re_data, re.pop, re.ind)
+    model.cur <- list(prob = 0, model = model.cur, coefs = model.cur.res$coefs, crit = model.cur.res$crit, alpha = 0, 
+                      random_effect = re.ind, re.mod = model.cur.res$re.mod)
     best.crit <- model.cur$crit # Reset first best criteria value
 
     # Run MJMCMC over the population
     if (verbose) print(paste("Population", p, "begin."))
-    #print(data.t)
-    mjmcmc_res <- mjmcmc.loop(data.t, complex, loglik.pi, model.cur, N, probs, params, sub, verbose)
+    mjmcmc_res <- mjmcmc.loop.re2(data.t, complex, loglik.pi, model.cur, N, probs, params, sub, verbose, re_data, re.pop, re.ind)
     if (verbose) cat(paste("\nPopulation", p, "done.\n"))
 
     # Add the models visited in the current population to the model list
@@ -111,16 +128,36 @@ gmjmcmc.ts <- function (
     model.probs.idx[[p]] <- mjmcmc_res$model.probs.idx
     # Store best marginal model probability for current population
     best.margs[[p]] <- mjmcmc_res$best.crit
+
+    #########################
+    # How to do the above for random effects? Included in model
+    # Split marginal probabilities for covariate features and random effects
+    n_pop <- length(S[[p]])
+    #print(n_pop)
+    n_re_pop <- length(S_re[[p]])
+    n_total <- length(marg.probs[[p]])
+    marg.probs.cov.1 <- marg.probs[[1]][1 : n_pop]
+    marg.probs.cov.p <- marg.probs[[p]][1 : n_pop]
+    marg.probs.re.p <- marg.probs[[p]][(n_pop + 1): n_total]
+
     # Print the marginal posterior distribution of the features after MJMCMC
     if (verbose) {
       cat(paste("\rCurrent best crit:", mjmcmc_res$best.crit, "\n"))
       cat("Feature importance:\n")
-      print_dist(marg.probs[[p]], sapply(S[[p]], print.feature.ts, labels = labels, round = 2), probs$filter)
+      print_dist(marg.probs.cov.p, sapply(S[[p]], print.feature.ts, labels = labels, round = 2), probs$filter)
+      ########################
+      # Print random effects probabilities
+      print_dist(marg.probs.re.p, sapply(S_re[[p]], print.feature.re), probs$filter)
     }
     if (params$rescale.large) prev.large <- params$large
     # Generate a new population of features for the next iteration (if this is not the last)
     if (p != P) {
-      S[[p + 1]] <- gmjmcmc.transition.ts(S[[p]], F.0, data, data_ts, ts_transforms, window_list, loglik.alpha, marg.probs[[1]], marg.probs[[p]], labels, probs, params$feat, verbose)
+      S[[p + 1]] <- gmjmcmc.transition.ts(S[[p]], F.0, data, data_ts, ts_transforms, window_list, loglik.alpha, 
+                                          marg.probs.cov.1, marg.probs.cov.p, labels, probs, params$feat, verbose)
+      ####################
+      # Population of random effects, correlation structure
+      S_re[[p + 1]] <- gmjmcmc.transition.re2(S_re[[p]], params, marg.probs.re.p, rand_effects, marg_lik_method, probs)
+      ####################
       complex <- complex.features(S[[p + 1]])
       if (params$rescale.large) params$large <- lapply(prev.large, function(x) x * length(S[[p + 1]]) / length(S[[p]]))
     }
@@ -134,6 +171,8 @@ gmjmcmc.ts <- function (
     models = models,                   # All models per population
     lo.models = lo.models,             # All local optim models per population
     populations = S,                   # All features per population
+    re_populations = S_re,             # All random effects per population
+    marg.lik.method = marg_lik_method,
     marg.probs = marg.probs,           # Marginal feature probabilities per population
     model.probs = model.probs,         # Marginal feature probabilities per population
     model.probs.idx = model.probs.idx, # Marginal feature probabilities per population
@@ -151,108 +190,72 @@ gmjmcmc.ts <- function (
 }
 
 
-gmjmcmc.transition.ts <- function(
-  S.t,
-  F.0,
-  data,
-  data.ts, 
-  ts_transforms,
-  window_list,
-  loglik.alpha,
-  marg.probs.F.0,
-  marg.probs,
-  labels,
-  probs,
+gmjmcmc.transition.re2 <- function(
+  S.t.re,
   params,
-  verbose = TRUE) {
-  # Sample which features to keep based on marginal inclusion below probs$filter
-  feats.keep <- as.logical(rbinom(n = length(marg.probs), size = 1, prob = pmin(marg.probs / probs$filter, 1)))
-  #print(lookback_window)
- 
-  # Always keep original covariates if that setting is on
-  if (params$keep.org) {
-    if (params$prel.filter > 0) {
-      # Do preliminary filtering if turned on
-      feats.keep[(seq_along(F.0))[marg.probs.F.0 > params$prel.filter]] <- T
-    } # Keep all if no preliminary filtering
-    else feats.keep[seq_along(F.0)] <- T
-  }
+  marg.probs,
+  rand_effects,
+  marg_lik_method,
+  probs
+) {
+  re.keep <- as.logical(rbinom(n = length(marg.probs), size = 1, prob = pmin(marg.probs / probs$filter, 1)))
 
+  # Remove features that are not kept
+  null.ind <- which(!(re.keep==1))
+  S.t.re[null.ind] <- NULL
 
-  # Avoid removing too many features
-  if (length(feats.keep) > 0 && mean(feats.keep) < params$keep.min & sum(feats.keep) < params$pop.max/2) {
-    feats.add.n <- round((params$keep.min - mean(feats.keep)) * length(feats.keep))
-    feats.add <- sample(which(!feats.keep), feats.add.n)
-    if((length(feats.add) + sum(feats.keep))>=params$pop.max)
-      feats.keep[feats.add] <- T
-  }
-  
-  if(sum(feats.keep)>params$pop.max)
-  {
-    warning("Number of features to keep greater than pop.max! 
-            Continue with pop.max features!
-            \n Check your tuning parameters!")
-    feats.keep[which(feats.keep==TRUE)[(params$pop.max+1):length(which(feats.keep==TRUE))]] <- FALSE
-  }
+  # Fill up population if it is too small
+  max_re <- params$max_rand_effects
+  # Safety counter
+  i <- 0
+  while (length(S.t.re) < max_re) {
+    re_new <- gen_rand_effects(rand_effects, marg_lik_method, 1)
+    # Unlist re_new
+    re_new2 <- re_new[[1]]
 
-  # Create a list of which features to replace
-  feats.replace <- which(!feats.keep)
-
-  # TODO: Let filtered features become part of new features - tuning parameter
-  # Create a list of inclusion probabilities
-  marg.probs.use <- c(rep(params$eps, length(F.0)), pmin(pmax(marg.probs, params$eps), (1-params$eps)))
-
-  # Perform the replacements
-  if(length(S.t)>params$pop.max)
-    feats.replace <- sort(feats.replace,decreasing = T)
-  for (i in feats.replace) {
-    prev.size <- length(S.t)
-    prev.feat.string <- print.feature.ts(S.t[[i]], labels=labels, round = 2)
-    if(prev.size>params$pop.max)
-    {
-      cat("Removed feature", prev.feat.string, "\n")
-      #print(length(S.t))
-      S.t[[i]] <- NULL
-      #print(length(S.t))
-      #print(length(marg.probs.use))
+    if (!in_population(re_new2, S.t.re, marg_lik_method)) {
+      S.t.re <- c(S.t.re, re_new)
     }
-    else
-    {
-      #print(length(S.t))
-      #print(length(F.0))
-      #out <- gen.feature.ts(c(F.0, S.t), marg.probs.use, data, lookback_window, loglik.alpha, probs, length(F.0), params, verbose)
-      S.t[[i]] <- gen.feature.ts(c(F.0, S.t), marg.probs.use, data, data.ts, window_list, loglik.alpha, probs, length(F.0), params, verbose)
-      #non_ts[i] <- out$ts.bool
-      if (prev.size > length(S.t)) {
-        if (verbose) {
-          cat("Removed feature", prev.feat.string, "\n")
-          cat("Population shrinking, returning.\n")
-        }
-        return(S.t)
-      }
-      if (verbose) cat("Replaced feature", prev.feat.string, "with", print.feature.ts(S.t[[i]], labels=labels, round = 2), "\n")
-      feats.keep[i] <- T
-      marg.probs.use[i] <- mean(marg.probs.use)
-    }
-  }
 
-  # Add additional features if the population is not at max size
-  if (length(S.t) < params$pop.max) {
-    for (i in (length(S.t)+1):params$pop.max) {
-      prev.size <- length(S.t)
-      #print(prev.size)
-      #'print(params$pop.max)
-      #out <- gen.feature.ts(c(F.0, S.t), marg.probs.use, data, loglik.alpha, probs, length(F.0), params, verbose)
-      S.t[[i]] <- gen.feature.ts(c(F.0, S.t), marg.probs.use, data, data.ts, window_list, loglik.alpha, probs, length(F.0), params, verbose)
-      #non_ts[i] <- out$ts.bool
-      if (prev.size == length(S.t)) {
-        if (verbose) cat("Population not growing, returning.\n")
-        return(S.t)
-      }
-      if (verbose) cat("Added feature", print.feature.ts(S.t[[i]], labels=labels, round = 2), "\n")
-      marg.probs.use <- c(marg.probs.use, params$eps)
+    if(i > 100) {
+      stop("Check if max_re parameter exceeds the number of unique random effects")
     }
+    i <- i + 1
   }
-  return(S.t)
+  return(S.t.re)
 }
 
+in_population <- function(re.new, S.t.re, marg_lik_method) {
+  if (marg_lik_method == "nlme") {
+    in_pop <- in_population_nlme(re.new, S.t.re)
+  }
+  else if (marg_lik_method == "inla") {
+    in_pop <- in_population_inla(re.new, S.t.re)
+  }
+  else {
+    stop("Invalid method for creating random effects! Only inla and nlme are possible.")
+  }
+  return(in_pop)
+}
+
+in_population_nlme <- function(re.new, S.t.re) {
+  in_pop <- FALSE
+  n.pop <- length(S.t.re)
+  if (n.pop == 0) {
+    return(in_pop)
+  }
+  for (i in 1:n.pop) {
+    cor.arg.match <- re.new$cor_arg == S.t.re[[i]]$cor_arg
+    rand.arg.match <- re.new$random_arg == S.t.re[[i]]$random_arg
+    if (cor.arg.match * rand.arg.match) {
+      in_pop <- TRUE
+      return(in_pop)
+    }
+  }
+  return(in_pop)
+}
+
+in_population_inla <- function(re.new, S.t.re) {
+  in_pop <- re.new %in% S.t.re
+  return(in_pop)
+}

@@ -5,21 +5,31 @@ precalc.features.ts <- function (data_, data_ts, lookback_window, features) {
   for (f in seq_along(features)) {
     feature <- features[[f]]
     feature_string <- print.feature.ts(feature, dataset = TRUE)
-    if (!is.null(attr(feature[[length(feature)]], "window"))) {
-        data <- data_ts
-        #print(feature_string)
-        calc <- eval(parse(text = feature_string))
+    #if (!is.null(attr(feature[[length(feature)]], "window"))) {
+    #    data <- data_ts
+    #    #print(feature_string)
+    #    calc <- eval(parse(text = feature_string))
         
-        start <- lookback_window
-        end <- nrow(data_ts)
-        calc <- calc[(start+1):end]
-    }
-    else {
-        data <- data_
-        calc <- eval(parse(text = feature_string))
-    }
+    #    start <- lookback_window
+    #    end <- nrow(data_ts)
+    #    calc <- calc[(start+1):end]
+    #}
+    #else {
+    #    data <- data_
+    #    calc <- eval(parse(text = feature_string))
+    #}
     #print(dim(precalc))
     #print(length(calc))
+    data <- data_ts
+    #print(head(data))
+    #print(feature_string)
+    calc <- eval(parse(text = feature_string))
+    start <- lookback_window
+    end <- nrow(data_ts)
+    #print(feature_string)
+    #print(calc)
+    calc <- calc[(start+1):end]
+
     precalc[, (f + 2)] <- calc
   }
   # Replace any -Inf and Inf values caused by under- or overflow

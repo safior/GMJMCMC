@@ -49,6 +49,7 @@ gen.time.series.feature <- function (
   marg.probs <- marg.probs[non_ts]
   #feat.count <- sample.int(n = (min(max.width, (length(features)))-1), size = 1)
   #feats <- sample.int(n = length(features), size = feat.count, prob = marg.probs+0.00001)
+  #print(length(features))
   feats <- sample.int(n = length(features), size = 1, prob = marg.probs+0.00001)
   trans <- sample.int(n = length(ts.trans.probs), size = 1, prob = ts.trans.probs)
   #print(trans)
@@ -97,9 +98,6 @@ gen.feature.ts <- function (
                                                         probs$trans_ts, params$L, params$max.proj.size, probs$trans_priors_ts)
     # Check that the feature is not too wide or deep
 
-    #if (feat.type==1) {
-    #  print(print.feature.ts(feat))
-    #}
     #print(print.feature.ts(feat))
     #print(depth.feature(feat))
     #print(width.feature(feat))
@@ -164,10 +162,7 @@ check.collinearity.ts <- function (proposal, features, F.0.size, data, data.ts, 
     #print(mock.data.ts)
   }
   # Use the mock data to precalc the features
-  #print(mock.data.ts)
   mock.data.precalc <- precalc.features.ts(mock.data, mock.data.ts, lookback_window, features)
-  #print(mock.data.precalc)
-  #print(mock.data.precalc)
   # Fit a linear model with the mock data precalculated features
   linearmod <- lm(as.data.frame(mock.data.precalc[, -2]))
   # Check if all coefficients were possible to calculate
