@@ -57,6 +57,8 @@ predict.gmjmcmc_merged.ts <- function (object, x, link = function(x) x, quantile
   #   x <- as.matrix(x)
   # }
   x2 <- x[(lookback_window + 1) : nrow(x), ]
+  x2 <- as.matrix(x2)
+  x <- as.matrix(x)
   #x <- format_imputed(object, x)
   #x2 <- format_imputed(object, x)
 

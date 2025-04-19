@@ -120,7 +120,9 @@ gmjmcmc.ts <- function (
     if (params$rescale.large) prev.large <- params$large
     # Generate a new population of features for the next iteration (if this is not the last)
     if (p != P) {
-      S[[p + 1]] <- gmjmcmc.transition.ts(S[[p]], F.0, data, data_ts, ts_transforms, window_list, loglik.alpha, marg.probs[[1]], marg.probs[[p]], labels, probs, params$feat, verbose)
+      new_pop <- gmjmcmc.transition.ts(S[[p]], F.0, data, data_ts, ts_transforms, window_list, loglik.alpha, marg.probs[[1]], marg.probs[[p]], labels, probs, params$feat, verbose)
+      S[[p + 1]] <- new_pop$S.t.new
+      params$feat <- new_pop$params_feat
       complex <- complex.features(S[[p + 1]])
       if (params$rescale.large) params$large <- lapply(prev.large, function(x) x * length(S[[p + 1]]) / length(S[[p]]))
     }
@@ -167,6 +169,10 @@ gmjmcmc.transition.ts <- function(
   verbose = TRUE) {
   # Sample which features to keep based on marginal inclusion below probs$filter
   feats.keep <- as.logical(rbinom(n = length(marg.probs), size = 1, prob = pmin(marg.probs / probs$filter, 1)))
+  # If all features are kept, increase number of features
+  if(sum(feats.keep) == length(marg.probs)) {
+    params$pop.max <- params$pop.max + 1
+  }
   #print(lookback_window)
  
   # Always keep original covariates if that setting is on
@@ -218,8 +224,9 @@ gmjmcmc.transition.ts <- function(
     }
     else
     {
-      #print(length(S.t))
-      #print(length(F.0))
+      # print(length(S.t))
+      # print(length(F.0))
+      # print(length(marg.probs.use))
       #out <- gen.feature.ts(c(F.0, S.t), marg.probs.use, data, lookback_window, loglik.alpha, probs, length(F.0), params, verbose)
       S.t[[i]] <- gen.feature.ts(c(F.0, S.t), marg.probs.use, data, data.ts, window_list, loglik.alpha, probs, length(F.0), params, verbose)
       #non_ts[i] <- out$ts.bool
@@ -228,7 +235,7 @@ gmjmcmc.transition.ts <- function(
           cat("Removed feature", prev.feat.string, "\n")
           cat("Population shrinking, returning.\n")
         }
-        return(S.t)
+        return(list(S.t.new=S.t, params_feat=params))
       }
       if (verbose) cat("Replaced feature", prev.feat.string, "with", print.feature.ts(S.t[[i]], labels=labels, round = 2), "\n")
       feats.keep[i] <- T
@@ -247,12 +254,12 @@ gmjmcmc.transition.ts <- function(
       #non_ts[i] <- out$ts.bool
       if (prev.size == length(S.t)) {
         if (verbose) cat("Population not growing, returning.\n")
-        return(S.t)
+        return(list(S.t.new=S.t, params_feat=params))
       }
       if (verbose) cat("Added feature", print.feature.ts(S.t[[i]], labels=labels, round = 2), "\n")
       marg.probs.use <- c(marg.probs.use, params$eps)
     }
   }
-  return(S.t)
+  return(list(S.t.new=S.t, params_feat=params))
 }
 
