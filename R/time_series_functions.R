@@ -1,9 +1,11 @@
 #' @export lagged
+# Lagged function (lag/backshift operator)
 lagged <- function(lag, x) {
     new_end <- length(x) - lag
     return(c(rep(NA, lag), x[1:new_end]))
 }
 
+# moving average function
 mov_avg <- function(window, x) {
     n <- length(x)
     m_av <- rep(NA, n)
@@ -13,12 +15,3 @@ mov_avg <- function(window, x) {
     }
     return(m_av)
 }
-
-#seq <- 1:100
-#print(seq)
-#l <- lagged(5, seq)
-#print(length(l))
-#print(l)
-#ma <- mov_avg(5, seq)
-#print(length(ma))
-#print(ma)

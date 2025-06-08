@@ -3,7 +3,8 @@ gen.params.gmjmcmc.re <- function(data) {
   # Get mjmcmc params
   params <- gen.params.gmjmcmc.ts(data)
 
-  params$max_rand_effects <- min(5, ceiling(ncol(data)/2))
+  # Parameter below should probably be set manually since correlation features do not undergo transformations
+  params$max_rand_effects <- min(3, ceiling(ncol(data)/2))
 
   return(params)
 }

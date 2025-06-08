@@ -25,9 +25,10 @@ model.proposal.1_4 <- function (model.size, neigh.min, neigh.max, indices, probs
   # Set neighborhood size, random or fixed
   if (neigh.max == neigh.min) neigh.size <- neigh.min
   else neigh.size <- sample.int(n = neigh.max - neigh.min, size = 1) + neigh.min - 1
-  # Select the negihborhood by sampling from the p covariates
-  if(length(indices)>0 & model.size > length(indices))
+  # Select the neighborhood by sampling from the p covariates
+  if(length(indices)>0) {# & model.size > length(indices)) {
     neighborhood <- sample2((1:model.size)[indices], size = neigh.size, prob = probs[indices] + 0.000001)
+  }
   else
     neighborhood <- 1
   # Sample which variables to change based on the probs vector
@@ -91,6 +92,7 @@ gen.proposal <- function (model, params, type, indices=NULL, probs=NULL, prob=FA
     }
     # Generate a proposal of type 3 or 4, i.e. a swap
     if (type > 2) probs <- NULL
+    # Features currently included have a larger probability of being flipped by below line? (If model_size>2)
     else if (!is.null(probs)) probs[model] <- 1 - probs[model]
     proposal <- model.proposal.1_4(length(model), params$neigh.min, params$neigh.max, indices, probs, prob)
   } else if (type == 5) {

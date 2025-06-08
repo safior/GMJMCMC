@@ -1,22 +1,7 @@
-[![](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![](https://img.shields.io/github/last-commit/jonlachmann/GMJMCMC.svg)](https://github.com/jonlachmann/GMJMCMC/commits/master)
-[![](https://img.shields.io/github/languages/code-size/jonlachmann/GMJMCMC.svg)](https://github.com/jonlachmann/GMJMCMC)
-[![R build status](https://github.com/jonlachmann/GMJMCMC/workflows/R-CMD-check/badge.svg)](https://github.com/jonlachmann/GMJMCMC/actions)
-[![codecov](https://codecov.io/gh/jonlachmann/GMJMCMC/branch/FBMS/graph/badge.svg)](https://codecov.io/gh/jonlachmann/GMJMCMC)
-[![License: GPL](https://img.shields.io/badge/license-GPL-blue.svg)](https://cran.r-project.org/web/licenses/GPL)
+# GMJMCMC with correlation features
 
-# FBMS - Flexible Bayesian Model Selection
+The folder "R" contains all the code used to run the base algorithm, and the extensions. Every file ending in ts, re and re2 are files created by me, and not a part of the base GMJMCMC package. 
 
-The `FBMS` package provides functions to estimate Bayesian Generalized nonlinear models (BGNLMs) through a Genetically Modified Mode Jumping MCMC algorithm.
+As of now, there is quite a lot of duplicated code. Some functions within the files with ts, re or re2 endings are completely new, and some are modified. The extent of the modifications varies between simply including more input parameters, to substantial altercations.  
 
-# Installation and getting started
-To install and load the development version of the package, just run
-```
-library(devtools)
-install_github("jonlachmann/GMJMCMC@FBMS", force=T, build_vignettes=T)
-library(FBMS)
-```
-With the package loaded, a vignette that shows how to run the package is available by running
-```
-vignette("FBMS-guide")
-```
+If this code was to be included in the GMJMCMC package, it should be cleaned up, and duplications should be removed. But to clearly indicate what I have done, and what I have not done, no files from the base GMJMCMC package have been removed, or edited in any substantial way. This should make it clear which functions I have created, and the extent to which they have been modified compared to the functions contained in the base GMJMCMC package; one can simply compare the function with ts, re or re2 ending with its counterpart without any of the three endings.

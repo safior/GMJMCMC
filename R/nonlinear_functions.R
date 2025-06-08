@@ -302,8 +302,11 @@ p0p3 <- function(x) p0(x)*x^(3)
 #' relu(2)
 #'
 #' @export relu
-relu <- function(x) max(x,0)
-
+#relu <- function(x) max(x,0)
+relu <- function(x){
+    bool <- x >= 0
+    return(x*bool)
+}
 
 #' negative ReLu function
 #'

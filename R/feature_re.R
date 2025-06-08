@@ -1,12 +1,14 @@
 #' @export print.feature.ts
+# Print correlation feature
 print.feature.re <- function(re){
-    #print(re)
     if (is.list(re)){
-        #fString <- ""
-        #for (i in 1:length(re)){
-        #    fString <- paste(fString, re[[i]], sep=", ")
-        #}
-        fString <- paste(re[[1]], re[[2]], sep = ", ")
+        if (re[[2]]=="") {
+            fString <- paste(re[[1]])
+        }
+        else{
+            # If the feature contains a grouping structure for nlme
+            fString <- paste(re[[1]], re[[2]], sep = ", ")
+        }
         return(fString)
     }
     return(re)

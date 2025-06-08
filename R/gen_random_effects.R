@@ -12,16 +12,15 @@ gen_rand_effects <- function(re_ops, marg_lik_method, n) {
   return(rand_effects)
 }
 
-# Generate random effects for inla
+# Generate n random effects for inla
 gen_rand_effects_inla <- function(rand_effects, n) {
   rand_effects <- sample(rand_effects, size = n, replace=FALSE)
   return(as.list(rand_effects))
 }
 
-# Generate a single random effect
+# Generate n random effects for nlme
 gen_rand_effects_nlme <- function(re_ops, n) {
   rand_effects <- list()
-  # Should make sure all random effects in each population are unique
   for (i in 1:n) {
     rand_prop <- gen_rand_effect_nlme(re_ops)
     rand_effects[[i]] <- rand_prop
@@ -29,7 +28,7 @@ gen_rand_effects_nlme <- function(re_ops, n) {
   return(rand_effects)
 }
 
-# Generate random effect for nlme.
+# Generate a random effect for nlme.
 gen_rand_effect_nlme <- function(rand_effects_ops) {
   cor_struct <- create_cor_struct(rand_effects_ops)
   cor_arg <- get_cor_arg(cor_struct)
@@ -44,9 +43,11 @@ create_cor_struct <- function(cor_ops) {
     cor_feat <- list()
 
     cor_structs <- cor_ops$cor_structs
+    # Sample from cor struct options
     cs_ind <- sample.int(length(cor_structs), size = 1)
     cor_feat$cor_struct <- cor_structs[cs_ind]
 
+    # For the sampled cor struct, sample 1 parameter value among the options for each parameter
     params <- cor_ops$params[[cs_ind]]
     n_params <- length(params)
     names <- names(params)
@@ -63,7 +64,7 @@ create_cor_struct <- function(cor_ops) {
     return(cor_feat)
 }
 
-# Get correlation argument for nlme
+# Puts the cor struct in the correct format, so that is accepted by gls/lme function in nlme
 get_cor_arg <- function(cor_feat) {
     cor_struct <- cor_feat$cor_struct
     
@@ -86,16 +87,16 @@ get_cor_arg <- function(cor_feat) {
     return(arg_string)
 }
 
-# Get a random formula for nlme. Currently only works with one formula
+# Get a random formula for nlme. Currently only works with one formula.
 get_re_groups <- function(group_ops, covariates) {
+    # Sample among possible group options
     n_group_ops <- length(names(group_ops))
     groups <- c()
     for (i in 1:n_group_ops) {
         g <- sample(group_ops[[i]], size = 1)
         groups <- c(groups, g)
     }
+    # Get the correct string representation, so that the random arg is accepted by lme function in nlme.
     random_arg <- paste(groups, collapse = "+")
-    #random_arg <- paste0("~", groups)
-    #print(random_arg)
     return(random_arg)
 }

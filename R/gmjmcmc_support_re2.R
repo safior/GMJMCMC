@@ -1,6 +1,8 @@
-loglik.pre.re2 <- function (loglik.pi, model, complex, data, params = NULL, visited.models = NULL, sub = FALSE,#visited.models = visited.models, sub = sub, 
+# Naming is due to this being version 2
+loglik.pre.re2 <- function (loglik.pi, model, complex, data, params = NULL, visited.models = NULL, sub = FALSE, 
                             re_data, re.pop, re.ind) {  
 
+    # Avoid refitting models already fitted earlier
     mod.check <- c(model, re.ind)
     if (!is.null(visited.models) && has_key(visited.models, mod.check)) {
       if (!sub) {
@@ -12,7 +14,7 @@ loglik.pre.re2 <- function (loglik.pi, model, complex, data, params = NULL, visi
       }
   }
 
-  # Find current random effect
+  # Find current correlation feature
   if(re.ind > 0) {
     re.feat <- re.pop[[re.ind]]
   }

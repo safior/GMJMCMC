@@ -1,8 +1,9 @@
+# Only one time series transformation is allowed per features, below function checks if the feature 
+# has already undergone a time series transformation.
 is_ts_feature <- function(feature) {
   is_ts <- FALSE
   feat <- feature[[length(feature)]]
   is_ts <- !is.null(attr(feat, "window"))
-  #print(print.feature.ts(feature))
   if (!is_ts && is.matrix(feat)) {
       for (i in 2:nrow(feat)) {
         # If we have a nested feature, recurse into it
@@ -14,10 +15,10 @@ is_ts_feature <- function(feature) {
         }
     }
   }
-  #print(is_ts)
   return(is_ts)
 }
 
+# Generate a time series feature/lookback modification
 gen.time.series.feature <- function (
   features,
   F.0.size,
@@ -28,55 +29,49 @@ gen.time.series.feature <- function (
   max.size,
   ts.trans.priors) {
   
-  # What if all features are ts features?
-  #d <- features[[F.0.size+i-1]]
   # Find all features that have already gone through a time series transformation
   ts_features <- lapply(features, function(x) x <- is_ts_feature(x))
-  #print(ts_features)
+
+  # Indexes of non time series feature/lookback modification
   non_ts <- !unlist(ts_features)
-  #print(lapply(features, function(x) x <- print(x[[length(x)]])))
+
+  # Remove ineligible features
   features <- features[non_ts]
-  #print(lapply(features, function(x) x <- print(x[[length(x)]])))
+
   # Below if check is unecessary if the create.feature function reaturns NULL itself when all features have already 
   # gone through a time series transformation, but this if check is probably faster either way
-  # Will never be null because F.0 is concatenated with current population
+  # Will never be null if F.0 is concatenated with current population
   if (sum(non_ts) == 0) {
-    print(non_ts)
     print("Null features returned")
     return(NULL)
   }
 
+  # Retain only marg.probs for eligible features.
   marg.probs <- marg.probs[non_ts]
-  #feat.count <- sample.int(n = (min(max.width, (length(features)))-1), size = 1)
-  #feats <- sample.int(n = length(features), size = feat.count, prob = marg.probs+0.00001)
-  #print(length(features))
+  # Sample feature
   feats <- sample.int(n = length(features), size = 1, prob = marg.probs+0.00001)
+  # Sample times series transformation
   trans <- sample.int(n = length(ts.trans.probs), size = 1, prob = ts.trans.probs)
-  #print(trans)
-  #print(ts.trans.probs)
 
-  #print(lookback_window)
-  #print(rep(1/lookback_window, lookback_window))
+  # Get lookback options for the sampled time series transformation
   window_ts <- unlist(window_list[trans])
+  # Assign uniform probabilites  over the lookback options
   pr <- rep(1/length(window_ts), length(window_ts))
+  # Sample the lookback window
   wind <- sample2(window_ts, size = 1, prob = pr)
-  #wind <- sample.int(n = lookback_window, size = 1, prob = rep(1/lookback_window, lookback_window))
 
+  # alphas is not currently implemented for time series transformation
   #alphas <- rep(1, length(feats)+1)
-  #print(lapply(features[F.0.size+1:length(features)], function(x) x <- print(x[[length(x)]])))
 
   create.feature.ts(trans, wind, features[feats], ts.trans.priors)#, alphas)
 }
 
-
-# Must add another feature type, and ensure that features that have gone through a time series transformation can not do 
-# do so again. Should probably be a vector of booleans.
-gen.feature.ts <- function (
-  features, 
-  marg.probs, 
-  data, 
+# Feature generation including lookback moodifiaction
+gen.feature.ts <- function(
+  features,
+  marg.probs,
+  data,
   data.ts,
-  #non_ts,
   window_list,
   loglik.alpha, 
   probs, 
@@ -88,20 +83,15 @@ gen.feature.ts <- function (
   lookback_window <- max(unlist(window_list))
   while (!feat.ok && tries < 50) {
     feat.type <- sample.int(n = 5, size = 1, prob = probs$gen)
-    #print(marg.probs)
-    #print(length(features))
     if (feat.type == 1) feat <- gen.multiplication(features, marg.probs)
     if (feat.type == 2) feat <- gen.modification(features, marg.probs, probs$trans, probs$trans_priors)
     if (feat.type == 3) feat <- gen.projection(features, marg.probs, probs$trans, params$L, params$max.proj.size, probs$trans_priors)
     if (feat.type == 4) feat <- gen.new(features, F.0.size)
+    # New feature type not included in the base algorithm
     if (feat.type == 5) feat <- gen.time.series.feature(features, F.0.size, window_list, marg.probs, 
                                                         probs$trans_ts, params$L, params$max.proj.size, probs$trans_priors_ts)
     # Check that the feature is not too wide or deep
 
-    #print(print.feature.ts(feat))
-    #print(depth.feature(feat))
-    #print(width.feature(feat))
-    #print(feat.type)
     if (!(depth.feature(feat) > params$D || width.feature(feat) > params$L)) {
       # Generate alphas using the strategy chosen
       if (params$alpha > 0) {
@@ -118,22 +108,10 @@ gen.feature.ts <- function (
           feat.ok <- T
       }
     }
-    #print(check.collinearity(feat, feats, F.0.size, data, params$col.check.mock.data))
-    #print(feat.ok)
     tries <- tries + 1
     params$eps <- min(params$eps + 0.01, 0.5)
     marg.probs <- pmin(pmax(marg.probs, params$eps), (1 - params$eps))
   }
-
-  # out <- list(
-  #   feature = NULL,
-  #   ts.bool = FALSE
-  # )
-  # if (feat.ok) {
-  #   out$feature <- feat
-  #   if (feat.type == 5) out$ts.bool <- TRUE
-  #   }
-  # return(out)
   if (!feat.ok) return(NULL)
   else return(feat)
 }
@@ -150,16 +128,13 @@ check.collinearity.ts <- function (proposal, features, F.0.size, data, data.ts, 
     # Increased multiplicator from 2 to 5 to increase the number of features per population. Seemed like the 
     # mjmcmc part of the algorithm produced alot of identical models. Probably, in general, also makes sense 
     # that time series needs larger multiplicator.
-    # The idea of sampling is to avoid removing features only showing collinearity in the start of the time period
     nr_rows <- min(F.0.size * 5, dim(data)[1])
+    # The idea of sampling is to avoid removing features only showing collinearity in the start of the time period
     #sample <- sample.int(nrow(data), nr_rows)
-    #print(sample)
     #mock.data <- check.data(data[sample, ], FALSE)
     #mock.data.ts <- check.data(data.ts[(sample + lookback_window), ], FALSE)
     mock.data <- check.data(data[seq_len(nr_rows), ], FALSE)
     mock.data.ts <- check.data(data.ts[seq_len(nr_rows + lookback_window), ], FALSE)
-    #print(mock.data)
-    #print(mock.data.ts)
   }
   # Use the mock data to precalc the features
   mock.data.precalc <- precalc.features.ts(mock.data, mock.data.ts, lookback_window, features)

@@ -1,13 +1,14 @@
 #' @export gmjmcmc.ts
+# Main function for iid approach to extending gmjmcmc to time series
 gmjmcmc.ts <- function (
   data_ts,
   loglik.pi = gaussian.loglik,
   loglik.alpha = gaussian.loglik.alpha,
   transforms,
   ###############
-  ts_transforms,
-  window_list,
-  add_lagged_response = TRUE,
+  ts_transforms, # Time series transformations
+  window_list,   # Lookback options
+  add_lagged_response, # Whether lagged response should be added as covariate or not
   ###############
   P = 10,
   N.init = 100,
@@ -26,15 +27,10 @@ gmjmcmc.ts <- function (
     # 2 because of NA introduced above
     data_ts <- data_ts[2:nrow(data_ts), ]
   }
-  #print(head(data_ts))
   # Find the largest possible lookback over all transforms
   lookback_window <- max(unlist(window_list))
-  #print(lookback_window)
   # +1 because we need a full window of covariates
   data <- data_ts[(lookback_window + 1) : nrow(data_ts), ]
-  #print(head(data))
-  #data[1:start, 1] <- NA
-  #print(data)
 
   # Verify that the data is well-formed
   data <- check.data(data, verbose)
@@ -66,7 +62,6 @@ gmjmcmc.ts <- function (
   best.margs <- vector("list", P)
 
   # Create first population
-  # How can you add time series features here?
   F.0 <- gen.covariates(ncol(data) - 2)
   if (is.null(params$prel.select))
     S[[1]] <- F.0
@@ -84,19 +79,16 @@ gmjmcmc.ts <- function (
     if (length(params$feat$prel.filter) > 0 | p != 1) data.t <- precalc.features.ts(data, data_ts, lookback_window, S[[p]])
     else {
       data.t <- data
-      print("ISSUE???")
     }
     
     # Initialize first model of population
     model.cur <- as.logical(rbinom(n = length(S[[p]]), size = 1, prob = 0.5))
-    #print(model.cur)
     model.cur.res <- loglik.pre(loglik.pi, model.cur, complex, data.t, params$loglik)
     model.cur <- list(prob = 0, model = model.cur, coefs = model.cur.res$coefs, crit = model.cur.res$crit, alpha = 0)
     best.crit <- model.cur$crit # Reset first best criteria value
 
     # Run MJMCMC over the population
     if (verbose) print(paste("Population", p, "begin."))
-    #print(data.t)
     mjmcmc_res <- mjmcmc.loop(data.t, complex, loglik.pi, model.cur, N, probs, params, sub, verbose)
     if (verbose) cat(paste("\nPopulation", p, "done.\n"))
 
@@ -173,7 +165,6 @@ gmjmcmc.transition.ts <- function(
   if(sum(feats.keep) == length(marg.probs)) {
     params$pop.max <- params$pop.max + 1
   }
-  #print(lookback_window)
  
   # Always keep original covariates if that setting is on
   if (params$keep.org) {
@@ -217,19 +208,11 @@ gmjmcmc.transition.ts <- function(
     if(prev.size>params$pop.max)
     {
       cat("Removed feature", prev.feat.string, "\n")
-      #print(length(S.t))
       S.t[[i]] <- NULL
-      #print(length(S.t))
-      #print(length(marg.probs.use))
     }
     else
     {
-      # print(length(S.t))
-      # print(length(F.0))
-      # print(length(marg.probs.use))
-      #out <- gen.feature.ts(c(F.0, S.t), marg.probs.use, data, lookback_window, loglik.alpha, probs, length(F.0), params, verbose)
       S.t[[i]] <- gen.feature.ts(c(F.0, S.t), marg.probs.use, data, data.ts, window_list, loglik.alpha, probs, length(F.0), params, verbose)
-      #non_ts[i] <- out$ts.bool
       if (prev.size > length(S.t)) {
         if (verbose) {
           cat("Removed feature", prev.feat.string, "\n")
@@ -247,11 +230,7 @@ gmjmcmc.transition.ts <- function(
   if (length(S.t) < params$pop.max) {
     for (i in (length(S.t)+1):params$pop.max) {
       prev.size <- length(S.t)
-      #print(prev.size)
-      #'print(params$pop.max)
-      #out <- gen.feature.ts(c(F.0, S.t), marg.probs.use, data, loglik.alpha, probs, length(F.0), params, verbose)
       S.t[[i]] <- gen.feature.ts(c(F.0, S.t), marg.probs.use, data, data.ts, window_list, loglik.alpha, probs, length(F.0), params, verbose)
-      #non_ts[i] <- out$ts.bool
       if (prev.size == length(S.t)) {
         if (verbose) cat("Population not growing, returning.\n")
         return(list(S.t.new=S.t, params_feat=params))

@@ -1,4 +1,5 @@
 #' @export 
+#' Summary function for gmjmcmc.ts
 summary.gmjmcmc.ts <- function (object, pop = "best", tol = 0.0001, labels = FALSE, effects = NULL, data = NULL, ...) {
   transforms.bak <- set.transforms(object$transforms)
   if (pop == "all") {
@@ -62,61 +63,7 @@ merge_results.ts <- function (results, populations = NULL, complex.measure = NUL
   raw.results <- results
   res.count <- length(results)
 
-  #print(res.count)
-  #print("gggggggg")
-  # Select populations to use
-  # res.lengths <- vector("list")
-  # for (i in 1:res.count) {
-  #   res.lengths[[i]] <- length(results[[i]]$populations)
-  # }
-  # if (populations == "last") pops.use <- res.lengths
-  # else if (populations == "all") pops.use <- lapply(res.lengths, function(x) 1:x)
-  # else if (populations == "best") pops.use <- lapply(1:res.count, function(x) which.max(unlist(results[[x]]$best.marg)))
 
-  # Get the population weigths to be able to weight the features
-  # pw <- population.weigths(results, pops.use)
-  # pop.weights <- pw$weights
-  
-  # bests <- matrix(data = 0, ncol = length(results), nrow = length(results[[1]]$populations))
-  # crit.best <- -Inf
-  # pop.best <- 1
-  # thread.best <- 1
-  # for (i in seq_along(results)) {
-  #   for (pop in 1:(length(results[[i]]$populations))) {
-  #     bests[pop, i] <- results[[i]]$best.margs[[pop]]
-  #     if (results[[i]]$best.margs[[pop]] > crit.best) {
-  #       crit.best <- results[[i]]$best.margs[[pop]]
-  #       pop.best <- pop
-  #       thread.best <- i
-  #     }
-  #   }
-  # }
-  
-  # Collect all features and their renormalized weighted values
-  # features <- vector("list")
-  # renorms <- vector("list")
-  # weight_idx <- 1
-  # for (i in 1:res.count) {
-  #   results[[i]]$pop.weights <- rep(NA, length(results[[i]]$populations))
-  #   results[[i]]$model.probs <- list()
-  #   for (pop in pops.use[[i]]) {
-  #     features <- append(features, results[[i]]$populations[[pop]])
-  #     renorms <- append(renorms, pop.weights[weight_idx] * results[[i]]$marg.probs[[pop]])
-  #     results[[i]]$pop.weights[pop] <- pop.weights[weight_idx]
-  #     weight_idx <- weight_idx + 1
-
-  #     model.probs <- marginal.probs.renorm(results[[i]]$models[[pop]], "models")
-  #     results[[i]]$model.probs[[pop]] <- model.probs$probs
-  #     results[[i]]$models[[pop]] <- results[[i]]$models[[pop]][model.probs$idx]
-  #   }
-  #   accept.tot <- results[[i]]$accept.tot
-  #   best <- results[[i]]$best
-  #   for (item in names(results[[i]])) {
-  #     if (!(item %in% (c("accept.tot", "best", "transforms")))) results[[i]][[item]] <- results[[i]][[item]][pops.use[[i]]]
-  #   }
-  #   results[[i]]$accept.tot <- accept.tot
-  #   results[[i]]$best <- best
-  # }
   # Get renomarlized features
   renorm_feat <- get_renomarlized_features(results, populations)
   features <- renorm_feat$features
@@ -131,51 +78,24 @@ merge_results.ts <- function (results, populations = NULL, complex.measure = NUL
     renorms <- renorms[-na.feats]
     features <- features[-na.feats]
   }
-  # feat.count <- length(features)
-
-  #print(head(data_ts))
 
   ## Detect equivalent features
   # Generate mock data to compare features with
-  #print(results[[1]])
   if (add_lagged_response) {
     data <- add_lag_resp(data) 
   }
 
-  #print(head(data))
+  # mock data not currently implemented
   #if (is.null(data)) mock.data <- matrix(runif((feat.count + 2)^2, -100, 100), ncol = feat.count + 2)
   #else {
   data2 <- data[(lw + 1) : nrow(data), ]
-  #print(head(data2))
+
   mock.data <- check.data(data2, FALSE)
   mock.data.ts <- check.data(data, FALSE)
-    #print(head(mock.data))
-    #print(head(mock.data.ts))
   #}
   
-  #print(head(mock.data))
-  #print(head(mock.data.ts))
-  #print(precalc.features.ts(mock.data, mock.data.ts, lw, features))
   mock.data.precalc <- precalc.features.ts(mock.data, mock.data.ts, lw, features)[,-(1:2)]
 
-  # Calculate the correlation to find equivalent features
-  #cors <- cor(mock.data.precalc)
-
-  # Get complexity for all features
-  #complex <- complex.features(features)
-
-  # A map to link equivalent features together,
-  # row 1-3 are the simplest equivalent features based on three different complexity measures
-  # row 4 is the total weighted density of those features
-  # feats.map <- matrix(1:feat.count, 4, feat.count, byrow = TRUE)
-  # for (i in seq_len(nrow(cors))) {
-  #   equiv.feats <- which(cors[i, ] >= (1 - tol))
-  #   # Compare equivalent features complexity to find most simple
-  #   equiv.complex <- list(width=complex$width[equiv.feats], oc=complex$oc[equiv.feats], depth=complex$depth[equiv.feats])
-  #   equiv.simplest <- lapply(equiv.complex, which.min)
-  #   feats.map[1:3,equiv.feats] <- c(equiv.feats[equiv.simplest$width], equiv.feats[equiv.simplest$oc], equiv.feats[equiv.simplest$depth])
-  #   feats.map[4,equiv.feats] <- sum(renorms[equiv.feats])
-  # }
   feats.map <- get_feats.map(mock.data.precalc, features, renorms, tol)
 
   # Select the simplest features based on the specified complexity measure and sort them
@@ -204,11 +124,13 @@ merge_results.ts <- function (results, populations = NULL, complex.measure = NUL
     transforms = results[[1]]$transforms,
     transforms.ts = results[[1]]$transforms.ts
   )
-  #print(results[[1]]$ts.transforms)
   attr(merged, "class") <- "gmjmcmc_merged"
   return(merged)
 }
 
+# Can be used with summary.gmjmcmc as well. 
+# Abstracted into its own function to reduce the length of summary.gmjmcmc.ts
+# Renormalize features over the selected populations
 get_renomarlized_features <- function(results, populations) {
   res.count <- length(results)
   # Select populations to use
@@ -247,6 +169,8 @@ get_renomarlized_features <- function(results, populations) {
   return(ret_list)
 }
 
+# Can be used with summary.gmjmcmc as well.
+# Return populations that are to be used
 select_pops <- function(results, res.count, populations) {
   res.lengths <- vector("list")
 
@@ -259,6 +183,8 @@ select_pops <- function(results, res.count, populations) {
   return(pops.use)
 }
 
+# Can be used with summary.gmjmcmc as well.
+# Find best population, and return corresponding thread and crit
 get_best_results <- function(results) {
   bests <- matrix(data = 0, ncol = length(results), nrow = length(results[[1]]$populations))
   crit.best <- -Inf
@@ -278,6 +204,7 @@ get_best_results <- function(results) {
   return(ret.list)
 }
 
+# Can be used with summary.gmjmcmc as well.
 # A map to link equivalent features together,
 # row 1-3 are the simplest equivalent features based on three different complexity measures
 # row 4 is the total weighted density of those features
@@ -301,16 +228,17 @@ get_feats.map <- function(mock.data.precalc, features, renorms, tol) {
   return(feats.map)
 }
 
+# Helper that adds lagged response to the data matrix
 add_lag_resp <- function(data) {
     lag_resp <- c(NA, data[1:(nrow(data)-1), 1])
     data <- cbind(data, lagged_response = lag_resp)
     data <- data[2:nrow(data), ]
 }
 
+# Updated summary.gmjmcmc function that works with gmjmcmc.parallel.ts
 summary.gmjmcmc_merged.ts <- function (object, tol = 0.0001, labels = FALSE, effects = NULL, pop = NULL, data_ts, window_list, add_lagged_response, ...) {
   transforms.bak <- set.transforms(object$transforms)
   transforms.bak.ts <- set.transforms.ts(object$transforms.ts)
-  #print(object$transforms.ts)
 
   if (!is.null(pop)) {
     

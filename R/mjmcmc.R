@@ -182,14 +182,16 @@ mjmcmc.prop <- function (data, loglik.pi, model.cur, complex, pip_estimate, prob
     chi.k.star <- localopt$model
 
     # Randomize around the mode
-    proposal <- gen.proposal(chi.k.star, list(neigh.size = length(pip_estimate), neigh.min = 1, neigh.max = length(pip_estimate)), q.r, NULL, (pip_estimate * 0 + 1 - params$random$prob), prob=TRUE)
+    proposal <- gen.proposal(chi.k.star, list(neigh.size = length(pip_estimate), neigh.min = 1, neigh.max = length(pip_estimate)), 
+                                              q.r, NULL, (pip_estimate * 0 + 1 - params$random$prob), prob=TRUE)
     proposal$model <- xor(chi.k.star, proposal$swap)
 
     # Do a backwards large jump and add in the kernel used in local optim to use the same for backwards local optim.
     chi.0 <- xor(proposal$model, large.jump$swap)
 
     # Do a backwards local optimization
-    localopt2 <- local.optim(chi.0, data, loglik.pi, !large.jump$swap, complex, q.o, params, kernel = localopt$kern,  visited.models=visited.models, sub = sub)
+    localopt2 <- local.optim(chi.0, data, loglik.pi, !large.jump$swap, complex, q.o, params, kernel = localopt$kern,
+                              visited.models=visited.models, sub = sub)
     chi.k <- localopt2$model
 
     ### Calculate acceptance probability
@@ -213,7 +215,7 @@ mjmcmc.prop <- function (data, loglik.pi, model.cur, complex, pip_estimate, prob
     model.cur$prob <- prob.proposal(proposal$model, model.cur$model, q.g, params$mh, pip_estimate)
   }
   # Calculate log likelihoods for the proposed model
-  proposal.res <- loglik.pre(loglik.pi, proposal$model, complex, data, params$loglik, visited.models=visited.models, sub = sub)
+  proposal.res <- loglik.pre(loglik.pi, proposal$model, complex, data, params$loglik, visited.models = visited.models, sub = sub)
   proposal$crit <- proposal.res$crit
 
   # Calculate acceptance probability for proposed model
@@ -223,4 +225,27 @@ mjmcmc.prop <- function (data, loglik.pi, model.cur, complex, pip_estimate, prob
   proposal$swap <- NULL; proposal$S <- NULL
   proposal$coefs <- proposal.res$coefs
   return(proposal)
+}
+
+loglik.pre <- function (loglik.pi, model, complex, data, params = NULL, visited.models = NULL, sub = FALSE) {
+  if (!is.null(visited.models) && has_key(visited.models, model)) {
+    if (!sub) {
+      return(visited.models[[model]])
+    } else {
+      params$coefs <- visited.models[[model]]$coefs
+      params$crit <- visited.models[[model]]$crit
+    }
+  }
+  # Get the complexity measures for just this model
+  complex <- list(width = complex$width[model], oc = complex$oc[model], depth = complex$depth[model])
+  # Call the model estimator with the data and the model, note that we add the intercept to every model
+  model.res <- loglik.pi(data[, 1], data[, -1], c(T, model), complex, params)
+  # Check that the critical value is acceptable
+  if (!is.numeric(model.res$crit) || is.nan(model.res$crit)) model.res$crit <- -.Machine$double.xmax
+  # Alpha cannot be calculated if the current and proposed models have crit which are -Inf or Inf
+  if (is.infinite(model.res$crit)) {
+    if (model.res$crit > 0) model.res$crit <- .Machine$double.xmax
+    else model.res$crit <- -.Machine$double.xmax
+  }
+  return(model.res)
 }

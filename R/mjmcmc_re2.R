@@ -1,54 +1,47 @@
+# Updated mjmcmc.loop function to accomodate correlation feature.
+# Naming with re2 due to this being version 2.
 mjmcmc.loop.re2 <- function (data, complex, loglik.pi, model.cur, N, probs, params, sub = FALSE, verbose = TRUE, re_data, re.pop, re.ind) {
   # Acceptance count
   accept <- 0
-  # Number of covariates or features (+ 1 because only 1 random effect is allowed?) + number of random effects
-  covar_count <- ncol(data) - 2 + 1 #+1 does not work and seems complicated to make work
+  # Number of covariates or features, subtract response and intercept 
+  # + 1 because of correlation feature
+  covar_count <- ncol(data) - 2 + 1
   # A list of models that have been visited
   models <- vector("list", N)
   # Initialize a vector to contain local opt visited models
   lo.models <- vector("list", 0)
-  # Get model without random effect and convert random effect index to logical vector for use in pip_estimate
+  # Get model without correlation feature and convert correlation feature index to logical vector for use in mcmc_total
   mod.without.re <- model.cur$model
   n_re <- length(re.pop)
   re.log <- ind.to.log(re.ind, n_re)
-  # Merge fixed effects vector with random effects vector
+  # Merge fixed effects vector with correlation feature vector
   model.cur$model <- c(model.cur$model, re.ind)
   # Initialize list for keeping track of unique visited models
   visited.models <- hashmap()
   visited.models[[model.cur$model]] <- list(crit = model.cur$crit, coefs = model.cur$coefs, re.mod = model.cur$re.mod)
-  #visited.models <- list(models = matrix(model.cur$model, 1, covar_count), crit = model.cur$crit, count = 1)
   best.crit <- model.cur$crit # Set first best criteria value
   best.coefs <- model.cur$coefs
 
   progress <- 0
+  # Must use logical vector for correlation features to get correct mcmc_total values
   mcmc_total <- as.numeric(c(mod.without.re, re.log))
-  #print(mcmc_total)
   for (i in seq_len(N)) {
     if (verbose && N > 40 && i %% floor(N / 40) == 0) progress <- print_progressbar(progress, 40)
 
     if (i > params$burn_in) {
       pip_estimate <- mcmc_total / i
-      # Select current random effect from pip_estimate vector
       mod.length <- length(model.cur$model)
-      #print(mod.length)
-      #print("fefef")
+      # Get pip.estimate for current model. Must extract only elements corresponding to included regular features and 
+      # included correlation feature.
       re.ind <- model.cur$model[mod.length]
       cur.inds <- c(1 : (mod.length-1), ((mod.length-1) + re.ind))
-      #print(1 : (mod.length-1))
-      #print(re.ind)
-      #print(cur.inds)
-      #print(pip_estimate)
       pip_estimate <- pip_estimate[cur.inds]
-      #print(length(pip_estimate))
-      #print(pip_estimate)
-      #print("ukukukuk")
     }
     else pip_estimate <- rep(1 / covar_count, covar_count)
 
     proposal <- mjmcmc.prop.re2(data, loglik.pi, model.cur, complex, pip_estimate, probs, params, visited.models, sub = sub, re_data, re.pop)#, re.ind)
     if (proposal$crit > best.crit) {
       best.crit <- proposal$crit
-      #print(best.crit)
       if (verbose) cat(paste("\rNew best population crit:", best.crit, "\n"))
     }
 
@@ -62,55 +55,23 @@ mjmcmc.loop.re2 <- function (data, complex, loglik.pi, model.cur, N, probs, para
     }
     visited.models[[proposal$model]] <- list(crit = proposal$crit, coefs = proposal$coefs, re.mod = proposal$re.mod)
 
-    # If we did a large jump and visited models to save
-    # if (!is.null(proposal$models)) {
-    #   lo.models <- c(lo.models, proposal$models)
-    #   # If we are doing subsampling and want to update best mliks
-    #   if (sub) {
-    #     for (mod in seq_along(proposal$models)) {
-    #       # Check if we have seen this model before
-    #       mod.idx <- vec_in_mat(visited.models$models[seq_len(visited.models$count), , drop = FALSE], proposal$models[[mod]]$model)
-    #       if (mod.idx == 0) {
-    #         # If we have not seen the model before, add it
-    #         visited.models$count <- visited.models$count + 1
-    #         visited.models$crit <- c(visited.models$crit, proposal$models[[mod]]$crit)
-    #         visited.models$models <- rbind(visited.models$models, proposal$models[[mod]]$model)
-    #       } # This is a model seen before, set the best of the values available
-    #       else visited.models$crit[mod.idx] <- max(proposal$models[[mod]]$crit, visited.models$crit[mod.idx])
-    #     }
-    #   }
-    #   proposal$models <- NULL
-    # }
-    # if (sub) {
-    #   # Check if we have seen this model before
-    #   mod.idx <- vec_in_mat(visited.models$models[seq_len(visited.models$count), , drop = FALSE], proposal$model)
-    #   if (mod.idx == 0) {
-    #     # If we have not seen the model before, add it
-    #     visited.models$count <- visited.models$count + 1
-    #     visited.models$crit <- c(visited.models$crit, proposal$crit)
-    #     visited.models$models <- rbind(visited.models$models, proposal$model)
-    #   } # This is a model seen before, set the best of the values available
-    #   else visited.models$crit[mod.idx] <- max(proposal$crit, visited.models$crit[mod.idx])
-    # }
-
     if (log(runif(1)) <= proposal$alpha) {
       model.cur <- proposal
       accept <- accept + 1
     }
-    #print(mcmc_total)
-    #print(model.cur$model)
-    # Convert random effect index to logical vector for use in pip_estimate
+    # Convert correlation features index to logical vector for use in pip_estimate
     mod.length <- length(model.cur$model)
     mod.without.re <- model.cur$model[1:(mod.length - 1)]
     mod.log <- c(mod.without.re, ind.to.log(model.cur$model[mod.length], n_re))
-    #print("thththth")
-    #print(mod.log)
+
+    # Update mcmc_total with current model
     mcmc_total <- mcmc_total + mod.log
     # Add the current model to the list of visited models
     models[[i]] <- model.cur
   }
 
   # Calculate and store the marginal inclusion probabilities and the model probabilities
+  # Reformat models with correlation features as logical vector so that marginal.probs.renorm function can used.
   formatted.models <- reformat.re.models(c(models, lo.models), length(re.pop))
   marg.probs <- marginal.probs.renorm(formatted.models, type = "both")
 
@@ -125,16 +86,17 @@ mjmcmc.loop.re2 <- function (data, complex, loglik.pi, model.cur, N, probs, para
   ))
 }
 
+# Reformat all models in "models" list
 reformat.re.models <- function(models, n.re) {
-  mm.length <- length(models[[1]]$model)#['model'])
-  #print(mm.length)
+  mm.length <- length(models[[1]]$model)
   models <- lapply(models, reformat.re.model, n.re, mm.length)
   return(models)
 }
 
+# Reformat model from bit string with integer element corresponding to correlation feature to a purely logical vector
+# E.g with 4 regular features and 3 correlation features: (1, 0, 1, 1, 3) to (1, 0, 1, 1, 0, 0, 1)
 reformat.re.model <- function(model, n.re, mm.length) {
   model.model <- model$model
-  #mm.length <- length(model.model)
   re.ind <- model.model[mm.length]
   re.ind.log <- ind.to.log(re.ind, n.re)
   model.model <- c(model.model[1:(mm.length - 1)], re.ind.log)
@@ -156,8 +118,11 @@ reformat.re.model <- function(model, n.re, mm.length) {
 #'
 #' @noRd
 #'
-mjmcmc.prop.re2 <- function (data, loglik.pi, model.cur, complex, pip_estimate, probs, params, visited.models=NULL, sub = FALSE, re_data, re.pop) {#}, re.ind) {
+# Updated mjmcmc.prop function to accomodate correlation feature.
+# Naming with re2 due to this being version 2.
+mjmcmc.prop.re2 <- function (data, loglik.pi, model.cur, complex, pip_estimate, probs, params, visited.models=NULL, sub = FALSE, re_data, re.pop) {
   model_length <- length(model.cur$model)
+  # Separate regular features and correlation features
   model.cur.mod <- model.cur$model[1:(model_length-1)]
   re.ind.start <- model.cur$model[model_length]
   n_re <- length(re.pop)
@@ -172,26 +137,18 @@ mjmcmc.prop.re2 <- function (data, loglik.pi, model.cur, complex, pip_estimate, 
     q.r <- sample.int(n = 2, size = 1, prob = probs$random.kern) # Select randomization kernel
 
     # Generate and do large jump
-    #print(pip_estimate)
     large.jump <- gen.proposal.re2(model.cur.mod, params$large, q.l, NULL, pip_estimate, n_re = n_re, re.ind = re.ind.start, re.ind.fix = FALSE) # Get the large jump
     chi.0.star <- xor(model.cur.mod, large.jump$swap) # Swap large jump indices
-    #print(model.cur.mod)
-    #print(large.jump$swap)
     re.ind.lj <- large.jump$re.ind
     # If random effect is changed, do not allow change in optimization and randomization
     re.ind.fix <- !(re.ind.start == re.ind.lj)
 
     # Optimize to find a mode
-    #print(length(model.cur.mod))
-    #print(length(large.jump$swap))
     localopt <- local.optim.re2(chi.0.star, data, loglik.pi, !large.jump$swap, complex, q.o, params, re_data = re_data, re.pop = re.pop, re.ind = re.ind.lj, re.ind.fix = re.ind.fix) # Do local optimization
     chi.k.star <- localopt$model
     re.ind.lo <- localopt$re.ind
-    #print(re.ind.lo)
 
     # Randomize around the mode
-    #proposal <- gen.proposal.re2(chi.k.star, params$random, q.r, !large.jump$swap, pip_estimate, prob=TRUE, n_re = n_re, re.ind = re.ind.lo, re.ind.fix = re.ind.fix)
-    #print((pip_estimate * 0 + 1 - params$random$prob))
     proposal <- gen.proposal.re2(chi.k.star, list(neigh.size = length(pip_estimate), 
                                 neigh.min = 1, neigh.max = length(pip_estimate)), q.r, NULL, 
                                 (pip_estimate * 0 + 1 - params$random$prob), prob=TRUE,
@@ -201,8 +158,8 @@ mjmcmc.prop.re2 <- function (data, loglik.pi, model.cur, complex, pip_estimate, 
 
     # Do a backwards large jump and add in the kernel used in local optim to use the same for backwards local optim.
     chi.0 <- xor(proposal$model, large.jump$swap)
-    # Backwards large jump for random effect is the start re if re is a part of the large jump, if not then the 
-    # backwards re is the re after forward randomization
+    # Backwards large jump for correlation feature is the start re.ind if re.ind is a part of the large jump, 
+    # if not, then the backwards re.ind is the re.ind after forward randomization
     if (re.ind.fix) {
       re.ind.back <- re.ind.start
     }
@@ -224,18 +181,15 @@ mjmcmc.prop.re2 <- function (data, loglik.pi, model.cur, complex, pip_estimate, 
     model.cur$prob <- prob.proposal.re2(c(proposal$model, proposal$re.ind), c(chi.k, chi.k.re.ind), q.r, prop.params, pip_estimate, n_re) # Get probability of gamma given chi.k
 
     # Store models visited during local optimization
-    # re.ind is the lasst element of localopt models
+    # Correlation feature is the last element of localopt models
     proposal$models <- c(localopt$models, localopt2$models)
   } else {
     ### Regular MH step
     # Select MH kernel
     q.g <- sample.int(n = 6, size = 1, prob = probs$mh)
     # Generate the proposal
-    #print("efefef")
-    #print(pip_estimate)
     proposal <- gen.proposal.re2(model.cur.mod, params$mh, q.g, NULL, pip_estimate, prob = TRUE, n_re = n_re, re.ind = re.ind.start, re.ind.fix = FALSE)
     proposal$model <- xor(proposal$swap, model.cur.mod)
-    #re.ind.new <- proposal$re.ind
 
     # Calculate current model probability given proposal
     model.cur$prob <- prob.proposal.re2(c(proposal$model, proposal$re.ind), c(model.cur.mod, re.ind.start), q.g, params$mh, pip_estimate, n_re)
@@ -245,16 +199,9 @@ mjmcmc.prop.re2 <- function (data, loglik.pi, model.cur, complex, pip_estimate, 
                                   re_data = re_data, re.pop = re.pop, re.ind = proposal$re.ind)
   proposal$crit <- proposal.res$crit
 
+  # Subsampling is not implemented.
   # If we are running with subsampling, check the list for a better mlik
   # if (!is.null(visited.models)) {
-  #   #print("ererere")
-  #   #print(proposal$model)
-  #   #print(proposal$re.ind)
-  #   #print(model.cur.mod)
-  #   #print(re.ind.start)
-  #   #print(re.pop)
-  #   #print("fgfgfg")
-  #   #print(visited.models$models[1:visited.models$count,,drop=FALSE])
   #   mod.idx <- vec_in_mat(visited.models$models[1:visited.models$count,,drop=FALSE], c(proposal$model, proposal$re.ind))
   #   if (mod.idx != 0) proposal$crit <- max(proposal$crit, visited.models$crit[mod.idx])
   # }
@@ -265,9 +212,8 @@ mjmcmc.prop.re2 <- function (data, loglik.pi, model.cur, complex, pip_estimate, 
   ### Format results and return them
   proposal$swap <- NULL; proposal$S <- NULL
   proposal$coefs <- proposal.res$coefs
-  # Append random effect ind to model
+  # Append correlation feature ind to model
   proposal$model <- c(proposal$model, proposal$re.ind)
   proposal$re.mod <- proposal.res$re.mod
-  #print(proposal$coefs)
   return(proposal)
 }

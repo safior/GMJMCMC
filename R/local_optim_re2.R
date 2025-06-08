@@ -3,6 +3,8 @@
 # Created by: jonlachmann
 # Created on: 2021-02-11
 
+# Updated simulated.annealing function to account for correlation features
+# Naming is due to this being version 2.
 simulated.annealing.re2 <- function (model, data, loglik.pi, indices, complex, params, loglikparams, kernel=NULL, visited.models=NULL, sub = FALSE, 
                                     re_data, re.pop, re.ind, re.ind.fix) {
   # Initialize a list to keep models that we visit in
@@ -26,6 +28,7 @@ simulated.annealing.re2 <- function (model, data, loglik.pi, indices, complex, p
     for (m in 1:params$M) {
       # Get a modified model as proposal and calculate its likelihood
       prop <- gen.proposal.re2(model, params$kern, kernel, indices, n_re = n_re, re.ind = re.ind, re.ind.fix = re.ind.fix)
+      # Get currently included correlation feature.
       prop.re.ind <- prop$re.ind
       proposal <- xor(model, prop$swap)
 
@@ -33,7 +36,7 @@ simulated.annealing.re2 <- function (model, data, loglik.pi, indices, complex, p
                                       re_data, re.pop, prop.re.ind)
 
       proposal.lik <- model.proposal$crit
-      # Append random effects index to proposal
+      # Append index of correlation feature to proposal
       # Store the model that we have calculated
       models[[length(models) + 1]] <- list(prob=NA, model=c(proposal, re.ind), coefs=model.proposal$coefs, crit=proposal.lik, 
                                           alpha=NA, re.mod = model.proposal$re.mod)
@@ -54,6 +57,8 @@ simulated.annealing.re2 <- function (model, data, loglik.pi, indices, complex, p
   return(list(model=model, kern=kernel, models=models, re.ind = re.ind))
 }
 
+# Updated greedy.optim function to account for correlation features
+# Naming is due to this being version 2.
 greedy.optim.re2 <- function (model, data, loglik.pi, indices, complex, params, loglikparams, kernel=NULL, visited.models = NULL, sub = FALSE,
                               re_data = re_data, re.pop = re.pop, re.ind = re.ind, re.ind.fix = re.ind.fix) {
   # Initialize a list to keep models that we visit in
@@ -79,18 +84,17 @@ greedy.optim.re2 <- function (model, data, loglik.pi, indices, complex, params, 
     for (j in 1:params$tries) {
       # Get a modified model as proposal and calculate its likelihood
       prop <- gen.proposal.re2(model, params$kern, kernel, indices, n_re = n_re, re.ind = re.ind, re.ind.fix=FALSE)
+      # Get currently included correlation feature.
       prop.re.ind <- prop$re.ind
       proposal <- xor(model, prop$swap)
-      #print(model)
-      #print(prob$swap)
 
       model.proposal <- loglik.pre.re2(loglik.pi, proposal, complex, data, loglikparams, visited.models, sub, 
                                         re_data, re.pop, prop.re.ind)
       proposal.lik <- model.proposal$crit
 
-      # Append random effects index to proposal
+      # Append index of correlation feature to proposal
       # Store the model that we have calculated
-      # Store random effects below
+      # Store correlation feature
       models[[length(models)+1]] <- list(prob=NA, model=c(proposal, prop.re.ind), coefs=model.proposal$coefs, crit=proposal.lik, 
                                           alpha=NA, re.mod = model.proposal$re.mod)
       if (proposal.lik > proposal.lik.best) {
@@ -109,6 +113,8 @@ greedy.optim.re2 <- function (model, data, loglik.pi, indices, complex, params, 
   return(list(model=model, kern=kernel, models=models, re.ind = re.ind))
 }
 
+# Updated local.optim function to account for correlation features
+# Naming is due to this being version 2. Only change is additional inputs.
 local.optim.re2 <- function (model, data, loglik.pi, indices, complex, type, params, kernel=NULL, visited.models = NULL, sub = FALSE, 
                             re_data, re.pop, re.ind, re.ind.fix) {
   if (type == 1) {

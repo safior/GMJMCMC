@@ -71,7 +71,7 @@ marginal.probs.renorm <- function (models, type = "features") {
   models.matrix <- models.matrix[!duplicates, ]
   if(!is.matrix(models.matrix))
     models.matrix <- t(as.matrix(models.matrix))
-  
+
   max_mlik <- max(models.matrix[,(model.size + 1)])
   crit.sum <- sum(exp(models.matrix[, (model.size + 1)] - max_mlik))
   if (type == "features" || type == "both") {
@@ -109,7 +109,8 @@ precalc.features <- function (data, features) {
 
 # TODO: Compare to previous mliks here instead, also add a flag to do that in full likelihood estimation scenarios.
 # Function to call the model function
-loglik.pre <- function (loglik.pi, model, complex, data, params = NULL, visited.models = visited.models, sub = sub) {
+#' @export loglik.pre
+loglik.pre <- function (loglik.pi, model, complex, data, params = NULL, visited.models = NULL, sub = FALSE) {
   if (!is.null(visited.models) && has_key(visited.models, model)) {
     if (!sub) {
       return(visited.models[[model]])

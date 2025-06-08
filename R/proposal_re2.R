@@ -1,12 +1,18 @@
 # Function to generate a proposed model given a current one
+# Update of gen.proposal function to accomodate correlation feature.
+# Naming of re2 is due to this being the second version.
+# Could be applied, with some modifications, to integer valued elements in general.
 gen.proposal.re2 <- function (model, params, type, indices=NULL, probs=NULL, prob=FALSE, n_re, re.ind, re.ind.fix) {
 
-  # Split features and random effects
-  # Determine if current model includes random effect (ittle bit hackish to use existing gen.proposal function) # Set re.ind to 0 to be compatible with binary input expected by gen.proposal
+  # Split regular features and correlation features
+  # Determine if current model includes correlation feature.
+  # Adjust model representation to be compatible with binary input expected by gen.proposal
+  # Set correlation feature element equal to 1 or 0 depending on whether a correlation feature is
+  # included in current model or not
   re.incl <- re.ind > 0
   model <- c(model, re.incl)
   model_length <- length(model)
-  # Use index functionality to disallow change of random effect
+  # Use indices vector to allow or disallow change of correlation feature
   if (!is.null(indices)) {
     indices[model_length] <- !re.ind.fix
   }
@@ -14,26 +20,31 @@ gen.proposal.re2 <- function (model, params, type, indices=NULL, probs=NULL, pro
   # If re.ind is not changed, then we set the new re.ind equal to the old re.ind
   re.ind.new <- re.ind
 
+  # Generate proposal of fully binary vector using the base gen.proposal function.
   proposal <- gen.proposal(model, params, type, indices, probs, prob)
 
   if (type < 5) {
     if(proposal$swap[model_length] != re.incl) {
       re.ind.ops <- 0:n_re
-      # +1 below because we allow removal of the random effect
+      # Sample from correlation features not included in current model
+      # +1 below because we allow the removal of the correlation feature
       re.ind.new <- sample(re.ind.ops[-(re.ind+1)], 1)
-      # Unsure if below line is correct
+      # Adjust probability to account for sampling over remaining correlation features, and no correlation feature.
       proposal$prob <- proposal$prob + log(1/n_re)
     }
   }
   else if (type == 5) {
+    # If correlation feature was not included, but is to be included by the proposal.
     if (proposal$swap[model_length]) {
       re.ind.ops <- 1:n_re
+      # Sample over correlation feature options
       re.ind.new <- sample(re.ind.ops, 1)
-      # Unsure if below line is correct
+      # Adjust probability to account for sampling over remaining correlation features, and no correlation feature.
       proposal$prob <- proposal$prob + log(1/n_re)
     }
   }
   else if (type == 6) {
+    # If correlation feature is to be removed from the proposal
     if (!proposal$swap[model_length]) {
       re.ind.new <- 0
     }
@@ -48,6 +59,7 @@ gen.proposal.re2 <- function (model, params, type, indices=NULL, probs=NULL, pro
   return(proposal)
 }
 
+# Unused
 # Calculate the probaility of getting a specified proposal given the current model (i.e. a pdf function)
 prob.proposal.re2 <- function (proposal, current, type, params, probs=NULL, n_re) {
   model_length <- length(proposal)
